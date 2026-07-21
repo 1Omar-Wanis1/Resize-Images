@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Enlarger — bulk resize &amp; upscale</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  :root{
+    --bg: #14110f;
+    --panel: #1d1815;
+    --panel-2: #241e1a;
+    --line: #352c26;
+    --text: #f2ece3;
+    --muted: #9c8f83;
+    --accent: #ff5a2e;   /* safelight amber-red */
+    --accent-dim: #7a2c16;
+    --accent-glow: rgba(255,90,46,0.35);
+    --ok: #d7c9a3;
+    --radius: 3px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(ellipse 900px 500px at 15% -10%, rgba(255,90,46,0.08), transparent 60%),
+      var(--bg);
+    color:var(--text);
+    font-family:'Inter', sans-serif;
+    min-height:100vh;
+    padding-bottom:80px;
+  }
+  .grain{
+    pointer-events:none;
+    position:fixed; inset:0;
+    opacity:0.035;
+    z-index:0;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  header{
+    position:relative; z-index:1;
+    max-width:960px; margin:0 auto; padding:56px 24px 28px;
+    border-bottom:1px solid var(--line);
+  }
+  .eyebrow{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--accent); margin-bottom:14px; display:flex; align-items:center; gap:10px;
+  }
+  .eyebrow::before{
+    content:""; width:7px; height:7px; border-radius:50%;
+    background:var(--accent); box-shadow:0 0 10px 2px var(--accent-glow);
+  }
+  h1{
+    font-family:'Archivo Black', sans-serif;
+    font-size:clamp(34px, 5.5vw, 56px);
+    line-height:0.98; margin:0 0 14px; letter-spacing:-0.01em;
+  }
+  h1 span{color:var(--accent);}
+  header p{
+    max-width:52ch; color:var(--muted); font-size:15.5px; line-height:1.55; margin:0;
+  }
+  main{
+    position:relative; z-index:1;
+    max-width:960px; margin:0 auto; padding:36px 24px 0;
+    display:flex; flex-direction:column; gap:28px;
+  }
+  .panel{
+    background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
+    padding:24px;
+  }
+  .panel h2{
+    font-family:'IBM Plex Mono', monospace; font-size:12px; letter-spacing:.12em;
+    text-transform:uppercase; color:var(--muted); margin:0 0 18px; font-weight:600;
+  }
+
+  /* Dropzone */
+  #drop{
+    border:1.5px dashed var(--line); border-radius:var(--radius);
+    padding:38px 20px; text-align:center; cursor:pointer;
+    transition:border-color .15s, background .15s;
+  }
+  #drop:hover, #drop.drag{
+    border-color:var(--accent); background:rgba(255,90,46,0.05);
+  }
+  #drop .lead{font-size:16px; font-weight:600; margin-bottom:6px;}
+  #drop .sub{font-size:13.5px; color:var(--muted);}
+  #fileInput{display:none;}
+
+  /* Controls */
+  .controls{
+    display:grid; grid-template-columns:repeat(auto-fit, minmax(150px,1fr)); gap:18px 22px;
+  }
+  .field label{
+    display:block; font-size:12px; font-family:'IBM Plex Mono', monospace;
+    color:var(--muted); letter-spacing:.04em; margin-bottom:8px;
+  }
+  select, input[type=number]{
+    width:100%; background:var(--panel-2); border:1px solid var(--line); color:var(--text);
+    padding:9px 10px; border-radius:var(--radius); font-family:'Inter'; font-size:14px;
+  }
+  select:focus, input:focus{outline:2px solid var(--accent); outline-offset:1px;}
+  .checkrow{display:flex; align-items:center; gap:9px; margin-top:26px;}
+  .checkrow input{width:16px; height:16px; accent-color:var(--accent);}
+  .checkrow label{font-size:13.5px; color:var(--ok); cursor:pointer;}
+  .dims-row{display:flex; gap:10px; align-items:end;}
+  .dims-row .field{flex:1;}
+  .lock-btn{
+    width:38px; height:38px; border-radius:var(--radius); border:1px solid var(--line);
+    background:var(--panel-2); color:var(--muted); cursor:pointer; font-size:15px;
+    flex:none;
+  }
+  .lock-btn.active{color:var(--accent); border-color:var(--accent);}
+
+  input[type=range]{width:100%; accent-color:var(--accent);}
+  .rangeval{font-family:'IBM Plex Mono', monospace; font-size:12px; color:var(--accent);}
+
+  /* Grid of images */
+  #grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(200px,1fr)); gap:14px;}
+  .card{
+    background:var(--panel-2); border:1px solid var(--line); border-radius:var(--radius);
+    overflow:hidden; position:relative;
+  }
+  .card .thumb{
+    width:100%; aspect-ratio:4/3; object-fit:cover; display:block; background:#0f0d0b;
+  }
+  .card .meta{padding:10px 12px 12px;}
+  .card .name{font-size:12.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .card .dims{font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--muted); margin-top:4px;}
+  .card .status{font-family:'IBM Plex Mono', monospace; font-size:10.5px; margin-top:6px; color:var(--accent);}
+  .card .status.done{color:#8fbf7a;}
+  .card .remove{
+    position:absolute; top:6px; right:6px; width:24px; height:24px; border-radius:50%;
+    background:rgba(20,17,15,0.85); border:1px solid var(--line); color:var(--text);
+    cursor:pointer; font-size:13px; line-height:1;
+  }
+  .dl-link{
+    display:inline-block; margin-top:8px; font-size:11.5px; font-family:'IBM Plex Mono', monospace;
+    color:var(--accent); text-decoration:none; border-bottom:1px solid var(--accent-dim);
+  }
+  .dl-link:hover{border-color:var(--accent);}
+
+  /* Actions */
+  .actions{display:flex; gap:12px; flex-wrap:wrap; align-items:center;}
+  button.primary{
+    background:var(--accent); color:#1a0f0a; border:none; font-weight:700; font-size:14.5px;
+    padding:13px 26px; border-radius:var(--radius); cursor:pointer;
+    transition:transform .1s, box-shadow .15s;
+    box-shadow:0 0 0 rgba(255,90,46,0);
+  }
+  button.primary:hover:not(:disabled){box-shadow:0 0 22px var(--accent-glow);}
+  button.primary:disabled{opacity:0.35; cursor:not-allowed;}
+  button.secondary{
+    background:transparent; border:1px solid var(--line); color:var(--muted);
+    padding:12px 20px; border-radius:var(--radius); font-size:14px; cursor:pointer;
+  }
+  button.secondary:hover{border-color:var(--accent); color:var(--accent);}
+  .count{
+    font-family:'IBM Plex Mono', monospace; font-size:12.5px; color:var(--muted); margin-left:auto;
+  }
+  .empty-note{color:var(--muted); font-size:13.5px; text-align:center; padding:30px 0;}
+  footer{
+    position:relative; z-index:1; max-width:960px; margin:40px auto 0; padding:20px 24px;
+    color:var(--muted); font-size:12px; font-family:'IBM Plex Mono', monospace; text-align:center;
+  }
+</style>
+</head>
+<body>
+<div class="grain"></div>
+
+<header>
+  <div class="eyebrow">local processing · no upload · no account</div>
+  <h1>Enlarge<span>r</span></h1>
+  <p>Bulk resize and upscale up to 10 photos at once, right in your browser. Nothing leaves your machine until you hit download.</p>
+</header>
+
+<main>
+
+  <section class="panel">
+    <h2>01 — Load photos</h2>
+    <div id="drop">
+      <div class="lead">Drop up to 10 images here</div>
+      <div class="sub">or click to browse · JPG, PNG, WebP</div>
+    </div>
+    <input type="file" id="fileInput" accept="image/*" multiple>
+  </section>
+
+  <section class="panel">
+    <h2>02 — Set output</h2>
+    <div class="controls">
+      <div class="field">
+        <label>Mode</label>
+        <select id="mode">
+          <option value="scale">Scale factor</option>
+          <option value="dims">Exact dimensions</option>
+        </select>
+      </div>
+      <div class="field" id="scaleField">
+        <label>Scale</label>
+        <select id="scaleFactor">
+          <option value="1.5">1.5×</option>
+          <option value="2" selected>2×</option>
+          <option value="3">3×</option>
+          <option value="4">4×</option>
+        </select>
+      </div>
+      <div class="field" id="widthField" style="display:none">
+        <div class="dims-row">
+          <div class="field" style="margin-bottom:0">
+            <label>Width (px)</label>
+            <input type="number" id="targetWidth" value="1920" min="1">
+          </div>
+          <div class="field" style="margin-bottom:0">
+            <label>Height (px)</label>
+            <input type="number" id="targetHeight" value="1080" min="1">
+          </div>
+          <button type="button" class="lock-btn active" id="lockRatio" title="Lock aspect ratio">🔒</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>Sharpen</label>
+        <div class="checkrow" style="margin-top:0">
+          <input type="checkbox" id="sharpen" checked>
+          <label for="sharpen">Apply after upscale</label>
+        </div>
+      </div>
+      <div class="field">
+        <label>Format</label>
+        <select id="format">
+          <option value="image/png">PNG (lossless)</option>
+          <option value="image/jpeg" selected>JPEG</option>
+          <option value="image/webp">WebP</option>
+        </select>
+      </div>
+      <div class="field" id="qualityField">
+        <label>Quality — <span class="rangeval" id="qualityVal">90%</span></label>
+        <input type="range" id="quality" min="10" max="100" value="90">
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>03 — Queue <span id="gridCount" style="color:var(--muted); text-transform:none; font-weight:400;"></span></h2>
+    <div id="grid"></div>
+    <div class="empty-note" id="emptyNote">No photos loaded yet.</div>
+  </section>
+
+  <div class="actions">
+    <button class="primary" id="processBtn" disabled>Process all</button>
+    <button class="secondary" id="zipBtn" disabled>Download all as ZIP</button>
+    <button class="secondary" id="clearBtn" disabled>Clear queue</button>
+    <span class="count" id="statusCount"></span>
+  </div>
+
+</main>
+
+<footer>Runs entirely client-side via the Canvas API — safe to host as a static page (GitHub Pages, Hostinger static hosting, etc). No server or fees required for this mode.</footer>
+
+<script>
+const MAX_FILES = 10;
+let items = []; // {id, file, img, name, w, h, resultBlob, resultUrl, outW, outH}
+
+const drop = document.getElementById('drop');
+const fileInput = document.getElementById('fileInput');
+const grid = document.getElementById('grid');
+const emptyNote = document.getElementById('emptyNote');
+const gridCount = document.getElementById('gridCount');
+const processBtn = document.getElementById('processBtn');
+const zipBtn = document.getElementById('zipBtn');
+const clearBtn = document.getElementById('clearBtn');
+const statusCount = document.getElementById('statusCount');
+
+const modeSel = document.getElementById('mode');
+const scaleField = document.getElementById('scaleField');
+const widthField = document.getElementById('widthField');
+const scaleFactor = document.getElementById('scaleFactor');
+const targetWidth = document.getElementById('targetWidth');
+const targetHeight = document.getElementById('targetHeight');
+const lockRatio = document.getElementById('lockRatio');
+const sharpenChk = document.getElementById('sharpen');
+const formatSel = document.getElementById('format');
+const qualityField = document.getElementById('qualityField');
+const qualityInput = document.getElementById('quality');
+const qualityVal = document.getElementById('qualityVal');
+
+drop.addEventListener('click', () => fileInput.click());
+['dragenter','dragover'].forEach(evt => drop.addEventListener(evt, e => { e.preventDefault(); drop.classList.add('drag'); }));
+['dragleave','drop'].forEach(evt => drop.addEventListener(evt, e => { e.preventDefault(); drop.classList.remove('drag'); }));
+drop.addEventListener('drop', e => handleFiles(e.dataTransfer.files));
+fileInput.addEventListener('change', e => handleFiles(e.target.files));
+
+modeSel.addEventListener('change', () => {
+  const isScale = modeSel.value === 'scale';
+  scaleField.style.display = isScale ? '' : 'none';
+  widthField.style.display = isScale ? 'none' : '';
+});
+formatSel.addEventListener('change', () => {
+  qualityField.style.display = formatSel.value === 'image/png' ? 'none' : '';
+});
+qualityInput.addEventListener('input', () => qualityVal.textContent = qualityInput.value + '%');
+lockRatio.addEventListener('click', () => lockRatio.classList.toggle('active'));
+
+let ratioLockSrc = null;
+targetWidth.addEventListener('input', () => {
+  if (lockRatio.classList.contains('active') && ratioLockSrc) {
+    targetHeight.value = Math.round(targetWidth.value / ratioLockSrc);
+  }
+});
+targetHeight.addEventListener('input', () => {
+  if (lockRatio.classList.contains('active') && ratioLockSrc) {
+    targetWidth.value = Math.round(targetHeight.value * ratioLockSrc);
+  }
+});
+
+function handleFiles(fileList) {
+  const files = Array.from(fileList).filter(f => f.type.startsWith('image/'));
+  if (items.length + files.length > MAX_FILES) {
+    alert(`Max ${MAX_FILES} images at a time. You have ${items.length}, tried to add ${files.length}.`);
+  }
+  const room = MAX_FILES - items.length;
+  files.slice(0, room).forEach(file => {
+    const id = Math.random().toString(36).slice(2);
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      items.push({ id, file, img, name: file.name, w: img.naturalWidth, h: img.naturalHeight, resultBlob:null, resultUrl:null });
+      if (!ratioLockSrc) ratioLockSrc = img.naturalWidth / img.naturalHeight;
+      render();
+    };
+    img.src = url;
+  });
+  fileInput.value = '';
+}
+
+function removeItem(id) {
+  items = items.filter(it => it.id !== id);
+  render();
+}
+
+function render() {
+  grid.innerHTML = '';
+  emptyNote.style.display = items.length ? 'none' : '';
+  gridCount.textContent = items.length ? `(${items.length}/${MAX_FILES})` : '';
+  processBtn.disabled = items.length === 0;
+  zipBtn.disabled = !items.some(it => it.resultBlob);
+  clearBtn.disabled = items.length === 0;
+
+  items.forEach(it => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    const outInfo = it.outW ? `${it.outW}×${it.outH}` : '—';
+    card.innerHTML = `
+      <img class="thumb" src="${it.img.src}">
+      <button class="remove" title="Remove">✕</button>
+      <div class="meta">
+        <div class="name">${it.name}</div>
+        <div class="dims">${it.w}×${it.h} → ${outInfo}</div>
+        <div class="status ${it.resultBlob ? 'done':''}">${it.resultBlob ? 'ready' : 'queued'}</div>
+        ${it.resultUrl ? `<a class="dl-link" download="${downloadName(it)}" href="${it.resultUrl}">↓ download</a>` : ''}
+      </div>
+    `;
+    card.querySelector('.remove').addEventListener('click', () => removeItem(it.id));
+    grid.appendChild(card);
+  });
+}
+
+function downloadName(it) {
+  const ext = formatSel.value.split('/')[1].replace('jpeg','jpg');
+  const base = it.name.replace(/\.[^.]+$/, '');
+  return `${base}_${it.outW}x${it.outH}.${ext}`;
+}
+
+function computeTarget(it) {
+  if (modeSel.value === 'scale') {
+    const s = parseFloat(scaleFactor.value);
+    return { w: Math.round(it.w * s), h: Math.round(it.h * s) };
+  }
+  return { w: parseInt(targetWidth.value,10), h: parseInt(targetHeight.value,10) };
+}
+
+// simple unsharp-mask style sharpen convolution
+function sharpenCanvas(ctx, w, h) {
+  const img = ctx.getImageData(0,0,w,h);
+  const src = img.data;
+  const out = new Uint8ClampedArray(src.length);
+  const kernel = [0,-1,0,-1,5,-1,0,-1,0];
+  for (let y=0; y<h; y++){
+    for (let x=0; x<w; x++){
+      for (let c=0;c<3;c++){
+        let sum=0, k=0;
+        for (let ky=-1; ky<=1; ky++){
+          for (let kx=-1; kx<=1; kx++){
+            const yy = Math.min(h-1, Math.max(0, y+ky));
+            const xx = Math.min(w-1, Math.max(0, x+kx));
+            sum += src[(yy*w+xx)*4+c] * kernel[k++];
+          }
+        }
+        out[(y*w+x)*4+c] = sum;
+      }
+      out[(y*w+x)*4+3] = src[(y*w+x)*4+3];
+    }
+  }
+  img.data.set(out);
+  ctx.putImageData(img,0,0);
+}
+
+async function processAll() {
+  processBtn.disabled = true;
+  statusCount.textContent = 'Processing…';
+  for (let i=0;i<items.length;i++){
+    await processOne(items[i]);
+    statusCount.textContent = `Processed ${i+1}/${items.length}`;
+    render();
+  }
+  statusCount.textContent = `Done — ${items.length} image(s) ready`;
+  processBtn.disabled = false;
+}
+
+function processOne(it) {
+  return new Promise(resolve => {
+    const {w, h} = computeTarget(it);
+    it.outW = w; it.outH = h;
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+
+    // progressive upscale for smoother results on large scale factors
+    let srcCanvas = it.img;
+    let curW = it.w, curH = it.h;
+    const steps = [];
+    while (curW * 2 < w && curH * 2 < h) {
+      curW = Math.round(curW*2); curH = Math.round(curH*2);
+      steps.push([curW,curH]);
+    }
+    let stepCanvas = document.createElement('canvas');
+    stepCanvas.width = it.w; stepCanvas.height = it.h;
+    let stepCtx = stepCanvas.getContext('2d');
+    stepCtx.drawImage(it.img,0,0);
+
+    steps.forEach(([sw,sh]) => {
+      const next = document.createElement('canvas');
+      next.width = sw; next.height = sh;
+      const nctx = next.getContext('2d');
+      nctx.imageSmoothingEnabled = true;
+      nctx.imageSmoothingQuality = 'high';
+      nctx.drawImage(stepCanvas,0,0,sw,sh);
+      stepCanvas = next; stepCtx = nctx;
+    });
+
+    ctx.drawImage(stepCanvas, 0,0, stepCanvas.width, stepCanvas.height, 0,0,w,h);
+
+    if (sharpenChk.checked) {
+      sharpenCanvas(ctx, w, h);
+    }
+
+    const fmt = formatSel.value;
+    const q = fmt === 'image/png' ? undefined : qualityInput.value/100;
+    canvas.toBlob(blob => {
+      if (it.resultUrl) URL.revokeObjectURL(it.resultUrl);
+      it.resultBlob = blob;
+      it.resultUrl = URL.createObjectURL(blob);
+      resolve();
+    }, fmt, q);
+  });
+}
+
+processBtn.addEventListener('click', processAll);
+
+clearBtn.addEventListener('click', () => {
+  items.forEach(it => { if (it.resultUrl) URL.revokeObjectURL(it.resultUrl); });
+  items = [];
+  ratioLockSrc = null;
+  render();
+});
+
+zipBtn.addEventListener('click', async () => {
+  const zip = new JSZip();
+  items.filter(it => it.resultBlob).forEach(it => {
+    zip.file(downloadName(it), it.resultBlob);
+  });
+  const content = await zip.generateAsync({type:'blob'});
+  const url = URL.createObjectURL(content);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'enlarger_export.zip';
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+render();
+</script>
+</body>
+</html>
