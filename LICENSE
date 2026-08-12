@@ -1,0 +1,110 @@
+Enlarger — bulk image resize, upscale, enhance & convert
+Copyright (c) 2026 Omar Wanis. All rights reserved.
+
+
+TERMS OF USE
+
+This software and its source code are the exclusive property of Omar Wanis
+("the Author") and are protected by copyright law. The source code is
+published publicly for transparency and so that the application can be
+served as a web page. Public visibility does NOT place this work in the
+public domain and does NOT grant any licence beyond the permissions
+expressly stated below.
+
+
+1. WHAT YOU MAY DO
+
+   a) Use the application freely, at no cost, for any purpose — personal,
+      educational, or commercial — by visiting a web page published by
+      the Author.
+
+   b) Process an unlimited number of your own images with it. The images
+      you process are entirely yours; the Author claims no rights over
+      them and never receives them (see section 5).
+
+   c) Link to, share, recommend, review, or write about the application.
+
+   d) Read the source code for the purposes of study, security review,
+      or personal learning.
+
+
+2. WHAT YOU MAY NOT DO, WITHOUT PRIOR WRITTEN PERMISSION FROM THE AUTHOR
+
+   a) Copy, reproduce, or republish the source code, in whole or in
+      substantial part.
+
+   b) Host, deploy, mirror, or otherwise make the application available
+      from any domain, server, or service other than the Author's own.
+
+   c) Modify, adapt, translate, or create derivative works from it.
+
+   d) Fork, redistribute, sublicense, sell, rent, or bundle it — alone or
+      as a component of any other product, service, or application.
+
+   e) Remove, obscure, alter, or relocate any copyright notice, author
+      credit, or attribution appearing in the source code or in the user
+      interface of the application.
+
+   f) Represent the work, or any part of it, as your own.
+
+
+3. REQUESTING PERMISSION
+
+   Permission for any use described in section 2 may be granted at the
+   Author's sole discretion. Requests should be directed to the Author.
+
+
+4. THIRD-PARTY COMPONENTS
+
+   The terms above apply to the original code authored by Omar Wanis.
+   They do NOT apply to the following third-party components, which the
+   application loads and which remain governed by their own licences and
+   remain the property of their respective owners:
+
+     • JSZip 3.10.1 — Stuart Knightley and contributors
+       Dual-licensed MIT / GPLv3.  https://stuk.github.io/jszip/
+
+     • Poppins (typeface) — Indian Type Foundry, Jonny Pinhorn
+       SIL Open Font License 1.1
+
+     • IBM Plex Mono (typeface) — IBM Corp.
+       SIL Open Font License 1.1
+
+     • Archivo Black (typeface) — Omnibus-Type
+       SIL Open Font License 1.1
+
+   Nothing in this licence restricts any right you hold in those
+   components under their respective licences.
+
+
+5. PRIVACY
+
+   The application performs all image processing locally, inside the
+   visitor's own web browser, using the Canvas API, Web Workers and the
+   File System Access API. No image, filename, or other file data is
+   transmitted to the Author or to any third party at any time. There is
+   no server-side component, no account system, no analytics, and no
+   tracking of any kind.
+
+
+6. NO WARRANTY
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+   OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+
+
+7. LIMITATION OF LIABILITY
+
+   IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+   FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+   DEALINGS IN THE SOFTWARE. THIS INCLUDES, WITHOUT LIMITATION, ANY LOSS
+   OF OR DAMAGE TO IMAGE FILES. USERS ARE RESPONSIBLE FOR KEEPING BACKUPS
+   OF THEIR ORIGINAL IMAGES.
+
+
+8. RESERVATION OF RIGHTS
+
+   All rights not expressly granted in section 1 are reserved by the
+   Author.

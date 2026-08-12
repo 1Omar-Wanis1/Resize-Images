@@ -1,497 +1,2096 @@
 <!DOCTYPE html>
-<html lang="en">
+<!--
+  ===========================================================================
+   Enlarger — bulk image resize, upscale, enhance & convert
+   Designed & built by Omar Wanis
+   Copyright (c) 2026 Omar Wanis. All rights reserved.
+
+   Free to use. Please keep this notice and the on-page credit intact
+   if you reuse, fork or adapt this code.
+  ===========================================================================
+-->
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Enlarger — bulk resize &amp; upscale</title>
+<title>Enlarger — bulk image resize, upscale &amp; convert</title>
+<meta name="description" content="Bulk resize, upscale, enhance and convert up to 500+ images at once. Runs entirely in your browser — nothing is uploaded.">
+<meta name="author" content="Omar Wanis">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=IBM+Plex+Mono:wght@400;500;600&family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
   :root{
-    --bg: #14110f;
-    --panel: #1d1815;
-    --panel-2: #241e1a;
-    --line: #352c26;
-    --text: #f2ece3;
-    --muted: #9c8f83;
-    --accent: #ff5a2e;   /* safelight amber-red */
-    --accent-dim: #7a2c16;
-    --accent-glow: rgba(255,90,46,0.35);
-    --ok: #d7c9a3;
-    --radius: 3px;
+    --bg:#100e0d; --bg-2:#171412; --panel:#1c1815; --panel-2:#232019; --panel-3:#2b2620;
+    --line:#3a322b; --line-2:#4e433a;
+    /* dark-mode text is deliberately high-contrast — small mono labels were the weak point */
+    --text:#fdfaf6; --muted:#cdc2b6; --faint:#a89b8f;
+    --accent:#ff6b40; --accent-2:#ff9a70; --accent-dim:#8a3419; --accent-glow:rgba(255,107,64,.32);
+    --ok:#96d996; --warn:#f3c860; --err:#ff8080; --sel:#6fb9ff;
+    --r:10px; --r-sm:6px;
+    --shadow:0 18px 40px rgba(0,0,0,.45);
+    --sp:cubic-bezier(.34,1.56,.64,1);
+  }
+  html[data-theme="light"]{
+    --bg:#f6f4f1; --bg-2:#efece7; --panel:#fff; --panel-2:#f5f2ee; --panel-3:#eae5df;
+    --line:#e0d9d1; --line-2:#cfc6bc;
+    --text:#1d1916; --muted:#6c625a; --faint:#948a80;
+    --accent:#e34a1f; --accent-2:#c93f18; --accent-dim:#f3c4b3; --accent-glow:rgba(227,74,31,.22);
+    --sel:#1f7ae0; --shadow:0 18px 40px rgba(0,0,0,.12);
   }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;}
   body{
-    background:
-      radial-gradient(ellipse 900px 500px at 15% -10%, rgba(255,90,46,0.08), transparent 60%),
-      var(--bg);
-    color:var(--text);
-    font-family:'Inter', sans-serif;
-    min-height:100vh;
-    padding-bottom:80px;
+    background:radial-gradient(ellipse 1100px 600px at 12% -12%, var(--accent-glow), transparent 62%), var(--bg);
+    color:var(--text); font-family:'Poppins',system-ui,sans-serif; min-height:100vh;
+    -webkit-font-smoothing:antialiased;
   }
-  .grain{
-    pointer-events:none;
-    position:fixed; inset:0;
-    opacity:0.035;
-    z-index:0;
-    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  }
-  header{
-    position:relative; z-index:1;
-    max-width:960px; margin:0 auto; padding:56px 24px 28px;
-    border-bottom:1px solid var(--line);
-  }
-  .eyebrow{
-    font-family:'IBM Plex Mono', monospace;
-    font-size:12px; letter-spacing:.14em; text-transform:uppercase;
-    color:var(--accent); margin-bottom:14px; display:flex; align-items:center; gap:10px;
-  }
-  .eyebrow::before{
-    content:""; width:7px; height:7px; border-radius:50%;
-    background:var(--accent); box-shadow:0 0 10px 2px var(--accent-glow);
-  }
-  h1{
-    font-family:'Archivo Black', sans-serif;
-    font-size:clamp(34px, 5.5vw, 56px);
-    line-height:0.98; margin:0 0 14px; letter-spacing:-0.01em;
-  }
-  h1 span{color:var(--accent);}
-  header p{
-    max-width:52ch; color:var(--muted); font-size:15.5px; line-height:1.55; margin:0;
-  }
-  main{
-    position:relative; z-index:1;
-    max-width:960px; margin:0 auto; padding:36px 24px 0;
-    display:flex; flex-direction:column; gap:28px;
-  }
-  .panel{
-    background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
-    padding:24px;
-  }
-  .panel h2{
-    font-family:'IBM Plex Mono', monospace; font-size:12px; letter-spacing:.12em;
-    text-transform:uppercase; color:var(--muted); margin:0 0 18px; font-weight:600;
-  }
+  ::-webkit-scrollbar{width:11px;height:11px;}
+  ::-webkit-scrollbar-track{background:transparent;}
+  ::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:8px;border:3px solid transparent;background-clip:content-box;}
+  ::-webkit-scrollbar-thumb:hover{background:var(--accent-dim);background-clip:content-box;}
 
-  /* Dropzone */
-  #drop{
-    border:1.5px dashed var(--line); border-radius:var(--radius);
-    padding:38px 20px; text-align:center; cursor:pointer;
-    transition:border-color .15s, background .15s;
-  }
-  #drop:hover, #drop.drag{
-    border-color:var(--accent); background:rgba(255,90,46,0.05);
-  }
-  #drop .lead{font-size:16px; font-weight:600; margin-bottom:6px;}
-  #drop .sub{font-size:13.5px; color:var(--muted);}
-  #fileInput{display:none;}
+  /* ============ animations ============ */
+  @keyframes cardIn{from{opacity:0;transform:translateY(14px) scale(.98);}to{opacity:1;transform:none;}}
+  @keyframes popIn{0%{transform:scale(.6);opacity:0;}60%{transform:scale(1.14);}100%{transform:scale(1);opacity:1;}}
+  @keyframes flashOk{0%{background:color-mix(in srgb,var(--ok) 42%,transparent);}100%{background:transparent;}}
+  @keyframes shimmer{0%{background-position:-320px 0;}100%{background-position:320px 0;}}
+  @keyframes wiggle{0%,100%{transform:rotate(0);}25%{transform:rotate(-2.5deg) scale(1.02);}75%{transform:rotate(2.5deg) scale(1.02);}}
+  @keyframes floaty{0%,100%{transform:translateY(0);}50%{transform:translateY(-7px);}}
+  @keyframes spinDash{to{background-position:64px 0,-64px 0,0 -64px,0 64px;}}
+  @keyframes drawCheck{to{stroke-dashoffset:0;}}
+  @keyframes slideBounce{0%{opacity:0;transform:translateX(30px) scale(.9);}70%{transform:translateX(-5px) scale(1.02);}100%{opacity:1;transform:none;}}
+  @keyframes glowPulse{0%,100%{box-shadow:0 8px 22px -8px var(--accent-glow);}50%{box-shadow:0 10px 34px -4px var(--accent-glow);}}
+  @keyframes barStripes{from{background-position:0 0;}to{background-position:38px 0;}}
+  @keyframes rowIn{from{opacity:0;transform:translateX(-10px);}to{opacity:1;transform:none;}}
+  @keyframes tada{0%{transform:scale(1);}20%{transform:scale(.92) rotate(-3deg);}45%{transform:scale(1.12) rotate(3deg);}70%{transform:scale(1.04) rotate(-1.5deg);}100%{transform:scale(1);}}
+  .fun .card{animation:cardIn .42s var(--sp) backwards;}
+  .fun .card:nth-of-type(2){animation-delay:.06s;} .fun .card:nth-of-type(3){animation-delay:.12s;}
+  .fun #drop .ic{animation:floaty 3.4s ease-in-out infinite;}
+  .fun #drop.drag{animation:wiggle .32s ease-in-out infinite;}
+  .fun .row.just-done{animation:flashOk .9s ease-out;}
+  .fun .badge.done{animation:popIn .3s var(--sp);}
+  .fun .btn.primary:not(:disabled){animation:glowPulse 2.8s ease-in-out infinite;}
+  .fun .btn:active:not(:disabled){transform:scale(.95);}
+  .fun .toast{animation:slideBounce .38s var(--sp);}
+  .fun .row{animation:rowIn .26s ease-out backwards;}
+  .fun .tada{animation:tada .7s var(--sp);}
+  html[data-fun="off"] *{animation:none !important;transition:none !important;}
+  @media(prefers-reduced-motion:reduce){*{animation:none !important;transition:none !important;}}
 
-  /* Controls */
-  .controls{
-    display:grid; grid-template-columns:repeat(auto-fit, minmax(150px,1fr)); gap:18px 22px;
-  }
-  .field label{
-    display:block; font-size:12px; font-family:'IBM Plex Mono', monospace;
-    color:var(--muted); letter-spacing:.04em; margin-bottom:8px;
-  }
-  select, input[type=number]{
-    width:100%; background:var(--panel-2); border:1px solid var(--line); color:var(--text);
-    padding:9px 10px; border-radius:var(--radius); font-family:'Inter'; font-size:14px;
-  }
-  select:focus, input:focus{outline:2px solid var(--accent); outline-offset:1px;}
-  .checkrow{display:flex; align-items:center; gap:9px; margin-top:26px;}
-  .checkrow input{width:16px; height:16px; accent-color:var(--accent);}
-  .checkrow label{font-size:13.5px; color:var(--ok); cursor:pointer;}
-  .dims-row{display:flex; gap:10px; align-items:end;}
-  .dims-row .field{flex:1;}
-  .lock-btn{
-    width:38px; height:38px; border-radius:var(--radius); border:1px solid var(--line);
-    background:var(--panel-2); color:var(--muted); cursor:pointer; font-size:15px;
-    flex:none;
-  }
-  .lock-btn.active{color:var(--accent); border-color:var(--accent);}
+  /* ============ top bar ============ */
+  .topbar{position:sticky;top:0;z-index:60;backdrop-filter:blur(12px);
+    background:color-mix(in srgb,var(--bg) 82%,transparent);border-bottom:1px solid var(--line);}
+  .topbar-in{max-width:1460px;margin:0 auto;padding:12px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+  .brand{font-family:'Archivo Black',sans-serif;font-size:22px;letter-spacing:-.02em;line-height:1;cursor:default;}
+  .brand span{color:var(--accent);display:inline-block;transition:transform .3s var(--sp);}
+  .brand:hover span{transform:rotate(-12deg) scale(1.25);}
+  .brand small{display:block;font-family:'IBM Plex Mono',monospace;font-size:9.5px;font-weight:400;
+    letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin-top:4px;}
+  .tb-spacer{flex:1;}
+  /* creator signature sitting with the wordmark — part of the identity, not an overlay */
+  .byline{display:inline-flex;align-items:center;gap:8px;font-family:'IBM Plex Mono',monospace;
+    font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:var(--muted);
+    padding-left:15px;margin-left:3px;border-left:1px solid var(--line-2);}
+  .byline b{color:var(--text);font-weight:600;letter-spacing:.11em;transition:color .3s,text-shadow .3s;}
+  .byline:hover b{color:var(--accent);text-shadow:0 0 16px var(--accent-glow);}
+  .byline .dot{width:5px;height:5px;border-radius:50%;background:var(--accent);opacity:.85;}
+  .fun .byline .dot{animation:floaty 3.2s ease-in-out infinite;}
+  @media(max-width:640px){.byline{padding-left:0;margin-left:0;border-left:none;width:100%;}}
 
-  input[type=range]{width:100%; accent-color:var(--accent);}
-  .rangeval{font-family:'IBM Plex Mono', monospace; font-size:12px; color:var(--accent);}
+  /* ============ buttons ============ */
+  button{font-family:inherit;}
+  .btn{border:1px solid var(--line-2);background:var(--panel-2);color:var(--text);padding:9px 15px;
+    border-radius:var(--r-sm);font-size:13.5px;font-weight:500;cursor:pointer;display:inline-flex;
+    align-items:center;gap:8px;transition:.15s;white-space:nowrap;}
+  .btn:hover:not(:disabled){border-color:var(--accent);color:var(--accent);transform:translateY(-1px);}
+  .btn:disabled{opacity:.4;cursor:not-allowed;}
+  .btn.ghost{background:transparent;border-color:var(--line);color:var(--muted);}
+  .btn.ghost:hover:not(:disabled){color:var(--accent);border-color:var(--accent);}
+  .btn.tiny{padding:5px 10px;font-size:12px;}
+  .btn.sel{border-color:var(--sel);color:var(--sel);}
+  .btn.primary{background:linear-gradient(120deg,var(--accent-2),var(--accent));color:#221008;border:none;
+    font-weight:700;font-size:15px;padding:14px 30px;border-radius:var(--r-sm);position:relative;overflow:hidden;}
+  .btn.primary::after{content:"";position:absolute;inset:0;background:linear-gradient(110deg,transparent 30%,rgba(255,255,255,.35),transparent 70%);
+    background-size:320px 100%;background-repeat:no-repeat;animation:shimmer 2.6s linear infinite;}
+  .btn.primary:hover:not(:disabled){transform:translateY(-2px);color:#221008;}
+  .btn.primary:disabled{background:var(--panel-3);color:var(--faint);animation:none;}
+  .btn.primary:disabled::after{display:none;}
+  .btn.danger:hover:not(:disabled){border-color:var(--err);color:var(--err);}
 
-  /* Grid of images */
-  #grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(200px,1fr)); gap:14px;}
-  .card{
-    background:var(--panel-2); border:1px solid var(--line); border-radius:var(--radius);
-    overflow:hidden; position:relative;
-  }
-  .card .thumb{
-    width:100%; aspect-ratio:4/3; object-fit:cover; display:block; background:#0f0d0b;
-  }
-  .card .meta{padding:10px 12px 12px;}
-  .card .name{font-size:12.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
-  .card .dims{font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--muted); margin-top:4px;}
-  .card .status{font-family:'IBM Plex Mono', monospace; font-size:10.5px; margin-top:6px; color:var(--accent);}
-  .card .status.done{color:#8fbf7a;}
-  .card .remove{
-    position:absolute; top:6px; right:6px; width:24px; height:24px; border-radius:50%;
-    background:rgba(20,17,15,0.85); border:1px solid var(--line); color:var(--text);
-    cursor:pointer; font-size:13px; line-height:1;
-  }
-  .dl-link{
-    display:inline-block; margin-top:8px; font-size:11.5px; font-family:'IBM Plex Mono', monospace;
-    color:var(--accent); text-decoration:none; border-bottom:1px solid var(--accent-dim);
-  }
-  .dl-link:hover{border-color:var(--accent);}
+  /* ============ layout ============ */
+  .hero{max-width:1460px;margin:0 auto;padding:34px 20px 6px;}
+  .hero h1{font-family:'Archivo Black',sans-serif;font-size:clamp(28px,4vw,44px);line-height:1;margin:0 0 12px;letter-spacing:-.02em;}
+  .hero h1 em{font-style:normal;color:var(--accent);}
+  .hero p{margin:0;color:var(--muted);font-size:15px;max-width:72ch;line-height:1.6;}
+  .layout{max-width:1460px;margin:0 auto;padding:24px 20px 150px;
+    display:grid;grid-template-columns:minmax(0,430px) minmax(0,1fr);gap:22px;align-items:start;}
+  @media(max-width:1100px){.layout{grid-template-columns:1fr;}}
+  .col{display:flex;flex-direction:column;gap:18px;min-width:0;}
+  .col.right{position:sticky;top:74px;}
+  @media(max-width:1100px){.col.right{position:static;}}
 
-  /* Actions */
-  .actions{display:flex; gap:12px; flex-wrap:wrap; align-items:center;}
-  button.primary{
-    background:var(--accent); color:#1a0f0a; border:none; font-weight:700; font-size:14.5px;
-    padding:13px 26px; border-radius:var(--radius); cursor:pointer;
-    transition:transform .1s, box-shadow .15s;
-    box-shadow:0 0 0 rgba(255,90,46,0);
-  }
-  button.primary:hover:not(:disabled){box-shadow:0 0 22px var(--accent-glow);}
-  button.primary:disabled{opacity:0.35; cursor:not-allowed;}
-  button.secondary{
-    background:transparent; border:1px solid var(--line); color:var(--muted);
-    padding:12px 20px; border-radius:var(--radius); font-size:14px; cursor:pointer;
-  }
-  button.secondary:hover{border-color:var(--accent); color:var(--accent);}
-  .count{
-    font-family:'IBM Plex Mono', monospace; font-size:12.5px; color:var(--muted); margin-left:auto;
-  }
-  .empty-note{color:var(--muted); font-size:13.5px; text-align:center; padding:30px 0;}
-  footer{
-    position:relative; z-index:1; max-width:960px; margin:40px auto 0; padding:20px 24px;
-    color:var(--muted); font-size:12px; font-family:'IBM Plex Mono', monospace; text-align:center;
-  }
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);}
+  .card > header{display:flex;align-items:center;gap:11px;padding:14px 16px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,var(--panel-2),var(--panel));border-radius:var(--r) var(--r) 0 0;}
+  .step{width:24px;height:24px;flex:none;border-radius:6px;background:var(--accent);color:#221008;
+    font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;display:grid;place-items:center;}
+  .card > header h2{margin:0;font-size:14px;font-weight:600;}
+  .card > header .hint{margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:11.6px;color:var(--muted);}
+  .card .body{padding:16px;}
+  .chip{font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.09em;text-transform:uppercase;
+    padding:3px 7px;border-radius:100px;border:1px solid var(--line-2);color:var(--faint);}
+  .chip.req{color:var(--accent);border-color:var(--accent-dim);}
+  .chip.opt{color:var(--faint);}
+
+  /* ============ dropzone ============ */
+  #drop{border-radius:var(--r);padding:26px 16px;text-align:center;cursor:pointer;transition:.18s;background:var(--panel-2);
+    background-image:linear-gradient(90deg,var(--line-2) 50%,transparent 0),linear-gradient(90deg,var(--line-2) 50%,transparent 0),
+      linear-gradient(0deg,var(--line-2) 50%,transparent 0),linear-gradient(0deg,var(--line-2) 50%,transparent 0);
+    background-repeat:repeat-x,repeat-x,repeat-y,repeat-y;
+    background-size:16px 1.5px,16px 1.5px,1.5px 16px,1.5px 16px;
+    background-position:0 0,0 100%,0 0,100% 0;}
+  #drop:hover,#drop.drag{background-color:color-mix(in srgb,var(--accent) 9%,var(--panel-2));
+    background-image:linear-gradient(90deg,var(--accent) 50%,transparent 0),linear-gradient(90deg,var(--accent) 50%,transparent 0),
+      linear-gradient(0deg,var(--accent) 50%,transparent 0),linear-gradient(0deg,var(--accent) 50%,transparent 0);
+    animation:spinDash 1.1s linear infinite;}
+  #drop .ic{font-size:28px;line-height:1;margin-bottom:8px;}
+  #drop .lead{font-size:15px;font-weight:600;}
+  #drop .sub{font-size:12.5px;color:var(--muted);margin-top:5px;line-height:1.5;}
+  .file-inputs{display:none;}
+  .addrow{display:flex;gap:8px;margin-top:12px;}
+  .addrow .btn{flex:1;justify-content:center;}
+
+  /* ============ form bits ============ */
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  .field{min-width:0;}
+  .field > label,.lbl{display:flex;align-items:center;gap:6px;font-family:'IBM Plex Mono',monospace;
+    font-size:11.2px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:7px;}
+  input[type=text],input[type=number],select{width:100%;background:var(--panel-2);border:1px solid var(--line-2);
+    color:var(--text);padding:9px 10px;border-radius:var(--r-sm);font-family:'Poppins';font-size:14px;transition:.15s;}
+  input[type=text]:focus,input[type=number]:focus,select:focus{outline:2px solid var(--accent);border-color:transparent;}
+  input[type=color]{width:100%;height:36px;padding:2px;background:var(--panel-2);border:1px solid var(--line-2);border-radius:var(--r-sm);cursor:pointer;}
+  select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);
+    background-position:calc(100% - 16px) 15px,calc(100% - 11px) 15px;background-size:5px 5px,5px 5px;background-repeat:no-repeat;padding-right:30px;}
+  .seg{display:grid;grid-template-columns:1fr 1fr;gap:6px;background:var(--panel-2);padding:5px;border-radius:var(--r-sm);border:1px solid var(--line);}
+  .seg label{display:flex;align-items:center;justify-content:center;padding:8px 6px;border-radius:5px;
+    font-size:12.5px;cursor:pointer;color:var(--muted);text-align:center;line-height:1.25;transition:.15s;}
+  .seg input{display:none;}
+  .seg label:has(input:checked){background:var(--accent);color:#221008;font-weight:600;transform:scale(1.02);}
+  .seg label:hover:not(:has(input:checked)){color:var(--text);}
+  .chk{display:flex;align-items:center;gap:9px;padding:6px 0;}
+  .chk input[type=checkbox]{width:16px;height:16px;accent-color:var(--accent);flex:none;cursor:pointer;}
+  .chk label{font-size:13.6px;color:var(--text);cursor:pointer;line-height:1.45;flex:1;}
+  .rng{display:flex;align-items:center;gap:11px;}
+  input[type=range]{flex:1;accent-color:var(--accent);}
+  .rngval{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--accent);min-width:46px;text-align:right;}
+  .sep{height:1px;background:var(--line);margin:14px 0;}
+  .note{font-size:12.3px;color:var(--faint);line-height:1.55;margin-top:8px;}
+  .note.warn{color:var(--warn);}
+  .linkbtn{width:34px;height:34px;flex:none;border:1px solid var(--line-2);background:var(--panel-2);
+    color:var(--faint);border-radius:var(--r-sm);cursor:pointer;font-size:14px;align-self:flex-end;margin-bottom:1px;}
+  .linkbtn.on{color:var(--accent);border-color:var(--accent);}
+
+  /* ============ info icon + portal tooltip ============ */
+  .i{width:16px;height:16px;flex:none;border-radius:50%;border:1px solid var(--line-2);color:var(--muted);
+    font-size:10px;font-weight:700;font-family:'IBM Plex Mono',monospace;display:inline-grid;place-items:center;
+    cursor:help;background:var(--panel-2);user-select:none;transition:.15s;}
+  .i:hover,.i.on{border-color:var(--accent);color:var(--accent);transform:scale(1.15);}
+  #tip{position:fixed;z-index:200;max-width:280px;background:var(--panel-3);color:var(--text);
+    border:1px solid var(--accent-dim);padding:10px 12px;border-radius:var(--r-sm);font-size:12.9px;
+    line-height:1.55;box-shadow:var(--shadow);pointer-events:none;opacity:0;transform:translateY(4px);
+    transition:opacity .13s,transform .13s;visibility:hidden;}
+  #tip.on{opacity:1;transform:none;visibility:visible;}
+
+  /* ============ queue ============ */
+  .qtools{display:flex;align-items:center;gap:7px;padding:10px 14px;border-bottom:1px solid var(--line);flex-wrap:wrap;background:var(--panel-2);}
+  .qcount{font-family:'IBM Plex Mono',monospace;font-size:12.4px;color:var(--muted);}
+  .qcount b{color:var(--accent);}
+  .selbar{display:flex;align-items:center;gap:7px;padding:10px 14px;background:color-mix(in srgb,var(--sel) 12%,var(--panel-2));
+    border-bottom:1px solid var(--line);flex-wrap:wrap;animation:rowIn .2s ease-out;}
+  .selbar .qcount b{color:var(--sel);}
+  #queue{max-height:min(58vh,660px);overflow:auto;}
+  #queue.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(158px,1fr));gap:10px;padding:12px;}
+  .row{display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid var(--line);
+    content-visibility:auto;contain-intrinsic-size:auto 56px;transition:background .15s;}
+  .row:hover{background:var(--panel-2);}
+  .row.on{background:color-mix(in srgb,var(--sel) 13%,transparent);}
+  .row .pick{width:16px;height:16px;flex:none;accent-color:var(--sel);cursor:pointer;}
+  .row .th{width:46px;height:38px;flex:none;border-radius:5px;object-fit:cover;background:var(--panel-3);display:block;}
+  .row .info{flex:1;min-width:0;}
+  .row .nm{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:text;}
+  .row .sub{font-family:'IBM Plex Mono',monospace;font-size:11.4px;color:var(--muted);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .row .sub .arrow{color:var(--accent);}
+  .row .acts{display:flex;gap:3px;flex:none;}
+  .iconbtn{width:26px;height:26px;border-radius:5px;border:1px solid transparent;background:transparent;
+    color:var(--faint);cursor:pointer;font-size:12px;display:grid;place-items:center;text-decoration:none;transition:.15s;}
+  .iconbtn:hover{border-color:var(--line-2);color:var(--accent);background:var(--panel-3);transform:scale(1.12);}
+  .badge{font-family:'IBM Plex Mono',monospace;font-size:10.2px;letter-spacing:.05em;text-transform:uppercase;
+    padding:3px 7px;border-radius:100px;border:1px solid var(--line-2);color:var(--muted);flex:none;}
+  .badge.done{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 45%,transparent);}
+  .badge.work{color:var(--accent);border-color:var(--accent-dim);}
+  .badge.err{color:var(--err);border-color:color-mix(in srgb,var(--err) 45%,transparent);}
+  .badge.skip{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 45%,transparent);}
+  .badge.cust{color:var(--sel);border-color:color-mix(in srgb,var(--sel) 50%,transparent);}
+  #queue.grid .row{display:block;padding:0;border:1px solid var(--line);border-radius:var(--r-sm);
+    overflow:hidden;background:var(--panel-2);contain-intrinsic-size:auto 180px;position:relative;}
+  #queue.grid .row.on{outline:2px solid var(--sel);}
+  #queue.grid .row .pick{position:absolute;top:7px;left:7px;z-index:2;width:18px;height:18px;}
+  #queue.grid .row .th{width:100%;height:108px;border-radius:0;}
+  #queue.grid .row .info{padding:8px 9px;}
+  #queue.grid .row .acts{padding:0 9px 9px;}
+  #queue.grid .row .badge{margin:0 9px;display:inline-block;}
+  .empty{padding:44px 20px;text-align:center;color:var(--faint);font-size:13.5px;line-height:1.7;}
+  .empty .big{font-size:34px;display:block;margin-bottom:10px;animation:floaty 3.4s ease-in-out infinite;}
+
+  /* ============ action bar ============ */
+  .actionbar{position:fixed;left:0;right:0;bottom:0;z-index:55;border-top:1px solid var(--line);
+    background:color-mix(in srgb,var(--bg) 90%,transparent);backdrop-filter:blur(14px);}
+  .actionbar-in{max-width:1460px;margin:0 auto;padding:12px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+  .summary{font-family:'IBM Plex Mono',monospace;font-size:12.2px;color:var(--muted);line-height:1.6;}
+  .summary b{color:var(--text);}
+  .ab-spacer{flex:1;}
+
+  /* ============ modals ============ */
+  .backdrop{position:fixed;inset:0;background:rgba(6,5,4,.74);backdrop-filter:blur(3px);z-index:100;
+    display:none;align-items:center;justify-content:center;padding:18px;}
+  .backdrop.open{display:flex;}
+  .modal{background:var(--panel);border:1px solid var(--line-2);border-radius:var(--r);box-shadow:var(--shadow);
+    width:100%;max-width:1040px;max-height:92vh;display:flex;flex-direction:column;overflow:hidden;animation:popIn .26s var(--sp);}
+  .modal > header{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line);background:var(--panel-2);}
+  .modal > header h3{margin:0;font-size:15px;}
+  .modal > header .x{margin-left:auto;}
+  .modal .mbody{padding:0;overflow:auto;flex:1;}
+  .modal .mfoot{border-top:1px solid var(--line);padding:12px 18px;background:var(--panel-2);}
+
+  table.pt{width:100%;border-collapse:collapse;font-size:12.5px;}
+  table.pt th{position:sticky;top:0;background:var(--panel-3);text-align:left;padding:8px 12px;
+    font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--muted);font-weight:600;z-index:2;border-bottom:1px solid var(--line-2);}
+  table.pt td{padding:7px 12px;border-bottom:1px solid var(--line);vertical-align:middle;}
+  table.pt tr{content-visibility:auto;contain-intrinsic-size:auto 34px;}
+  table.pt td.mono{font-family:'IBM Plex Mono',monospace;font-size:11.8px;color:var(--muted);white-space:nowrap;}
+  table.pt td.path{max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  table.pt tr.is-err td{background:color-mix(in srgb,var(--err) 9%,transparent);}
+  table.pt tr.is-run td{background:color-mix(in srgb,var(--accent) 8%,transparent);}
+  table.pt tr.is-ok td{animation:flashOk .9s ease-out;}
+  .bar{height:10px;border-radius:100px;background:var(--panel-3);overflow:hidden;border:1px solid var(--line);}
+  .bar > i{display:block;height:100%;width:0;border-radius:100px;transition:width .25s ease-out;
+    background:linear-gradient(90deg,var(--accent),var(--accent-2));
+    background-image:linear-gradient(45deg,rgba(255,255,255,.18) 25%,transparent 25%,transparent 50%,
+      rgba(255,255,255,.18) 50%,rgba(255,255,255,.18) 75%,transparent 75%),linear-gradient(90deg,var(--accent),var(--accent-2));
+    background-size:38px 38px,100% 100%;animation:barStripes .7s linear infinite;}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px 16px;margin-top:12px;
+    font-family:'IBM Plex Mono',monospace;font-size:11.5px;}
+  .stats div span{display:block;color:var(--muted);font-size:10.2px;letter-spacing:.07em;text-transform:uppercase;margin-bottom:3px;}
+  .stats div b{font-weight:600;color:var(--text);font-size:13px;}
+  .stats div b.good{color:var(--ok);} .stats div b.bad{color:var(--err);}
+
+  /* ============ preview ============ */
+  #cmpWrap{background:#0a0908;display:grid;place-items:center;min-height:300px;overflow:auto;padding:14px;position:relative;}
+  #cmpBox{position:relative;line-height:0;box-shadow:0 0 0 1px var(--line-2);max-width:100%;}
+  #cmpBox img{display:block;image-rendering:auto;}
+  #cmpAfter{position:absolute;inset:0;overflow:hidden;}
+  #cmpAfter img{position:absolute;top:0;left:0;}
+  #cmpHandle{position:absolute;top:0;bottom:0;width:3px;background:var(--accent);cursor:ew-resize;z-index:3;}
+  #cmpHandle::after{content:"⟺";position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+    width:34px;height:34px;border-radius:50%;background:var(--accent);color:#221008;display:grid;
+    place-items:center;font-size:15px;box-shadow:0 4px 14px rgba(0,0,0,.5);}
+  .cmpTag{position:absolute;top:8px;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.08em;
+    text-transform:uppercase;background:rgba(10,9,8,.8);color:#fff;padding:4px 9px;border-radius:100px;z-index:4;}
+  .pvbar{display:flex;align-items:center;gap:9px;padding:11px 16px;flex-wrap:wrap;border-bottom:1px solid var(--line);background:var(--panel-2);}
+  .pvinfo{font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--muted);line-height:1.6;}
+  .pvinfo b{color:var(--text);}
+  .spinner{width:34px;height:34px;border:3px solid var(--line-2);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  .dlg{max-width:480px;}
+  .dlg .mbody{padding:18px;font-size:13.5px;line-height:1.65;color:var(--muted);}
+  .dlg .mbody b{color:var(--text);word-break:break-word;}
+  .dlg .mbody ul{margin:10px 0 0;padding-left:20px;}
+  .dlg .mfoot{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;align-items:center;}
+
+  /* ============ tour ============ */
+  #tourMask{position:fixed;inset:0;z-index:110;display:none;}
+  #tourMask.on{display:block;}
+  #tourHole{position:fixed;border-radius:10px;box-shadow:0 0 0 9999px rgba(6,5,4,.8),0 0 0 2px var(--accent);
+    transition:all .25s var(--sp);pointer-events:none;}
+  #tourPop{position:fixed;width:min(346px,calc(100vw - 28px));background:var(--panel);border:1px solid var(--accent-dim);
+    border-radius:var(--r);padding:16px;box-shadow:var(--shadow);transition:all .25s var(--sp);}
+  #tourPop .tstep{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);margin-bottom:7px;}
+  #tourPop h4{margin:0 0 7px;font-size:15.5px;}
+  #tourPop p{margin:0;font-size:13.2px;color:var(--muted);line-height:1.55;}
+  #tourPop .tnav{display:flex;gap:8px;margin-top:14px;align-items:center;}
+  .dots{display:flex;gap:4px;margin-right:auto;flex-wrap:wrap;max-width:130px;}
+  .dots i{width:6px;height:6px;border-radius:50%;background:var(--line-2);transition:.2s;}
+  .dots i.on{background:var(--accent);transform:scale(1.4);}
+
+  #toasts{position:fixed;right:16px;bottom:84px;z-index:120;display:flex;flex-direction:column;gap:8px;max-width:340px;}
+  .toast{background:var(--panel-3);border:1px solid var(--line-2);border-left:3px solid var(--accent);
+    padding:11px 13px;border-radius:var(--r-sm);font-size:12.8px;box-shadow:var(--shadow);line-height:1.45;}
+  .toast.err{border-left-color:var(--err);} .toast.ok{border-left-color:var(--ok);}
+  .toast b{display:block;margin-bottom:2px;font-size:12px;}
+  #confetti{position:fixed;inset:0;z-index:150;pointer-events:none;display:none;}
+  footer.site{max-width:1460px;margin:0 auto;padding:8px 20px 34px;color:var(--muted);font-size:12.2px;font-family:'IBM Plex Mono',monospace;line-height:1.75;text-align:center;}
+  .credit{display:flex;align-items:center;justify-content:center;gap:12px;margin-top:18px;
+    font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);}
+  .credit .rule{height:1px;width:clamp(20px,7vw,62px);background:linear-gradient(90deg,transparent,var(--line-2));}
+  .credit .rule.r{background:linear-gradient(90deg,var(--line-2),transparent);}
+  .credit .sig{display:inline-flex;align-items:center;gap:8px;}
+  .credit .dot{width:5px;height:5px;border-radius:50%;background:var(--accent);opacity:.7;}
+  .fun .credit .dot{animation:floaty 3.2s ease-in-out infinite;}
+  .credit b{color:var(--muted);font-weight:600;letter-spacing:.13em;transition:color .3s,text-shadow .3s;}
+  .credit:hover b{color:var(--accent);text-shadow:0 0 16px var(--accent-glow);}
 </style>
 </head>
-<body>
-<div class="grain"></div>
+<body class="fun">
+<div class="topbar">
+  <div class="topbar-in">
+    <div class="brand">Enlarge<span>r</span><small>bulk resize · upscale · enhance · convert</small></div>
+    <span class="byline"><span class="dot"></span>by <b>Omar Wanis</b></span>
+    <div class="tb-spacer"></div>
+    <button class="btn ghost tiny" id="btnFun" title="Toggle animations">✨</button>
+    <button class="btn ghost tiny" id="btnTheme" title="Light / dark">◐</button>
+    <button class="btn" id="btnTour">◎ Take the tour</button>
+  </div>
+</div>
 
-<header>
-  <div class="eyebrow">local processing · no upload · no account</div>
-  <h1>Enlarge<span>r</span></h1>
-  <p>Bulk resize and upscale up to 10 photos at once, right in your browser. Nothing leaves your machine until you hit download.</p>
-</header>
+<div class="hero">
+  <h1>Resize, enhance &amp; convert <em>hundreds</em> of photos at once.</h1>
+  <p>Drop in up to 500+ images, pick exactly what each one should become — size, format, file weight — preview the result, then hit Convert. Everything runs inside your browser on your own CPU cores. No upload, no account, no file-size limits.</p>
+</div>
 
-<main>
+<div class="layout">
+  <div class="col">
 
-  <section class="panel">
-    <h2>01 — Load photos</h2>
-    <div id="drop">
-      <div class="lead">Drop up to 10 images here</div>
-      <div class="sub">or click to browse · JPG, PNG, WebP</div>
-    </div>
-    <input type="file" id="fileInput" accept="image/*" multiple>
-  </section>
-
-  <section class="panel">
-    <h2>02 — Set output</h2>
-    <div class="controls">
-      <div class="field">
-        <label>Mode</label>
-        <select id="mode">
-          <option value="scale">Scale factor</option>
-          <option value="dims">Exact dimensions</option>
-        </select>
-      </div>
-      <div class="field" id="scaleField">
-        <label>Scale</label>
-        <select id="scaleFactor">
-          <option value="1.5">1.5×</option>
-          <option value="2" selected>2×</option>
-          <option value="3">3×</option>
-          <option value="4">4×</option>
-        </select>
-      </div>
-      <div class="field" id="widthField" style="display:none">
-        <div class="dims-row">
-          <div class="field" style="margin-bottom:0">
-            <label>Width (px)</label>
-            <input type="number" id="targetWidth" value="1920" min="1">
-          </div>
-          <div class="field" style="margin-bottom:0">
-            <label>Height (px)</label>
-            <input type="number" id="targetHeight" value="1080" min="1">
-          </div>
-          <button type="button" class="lock-btn active" id="lockRatio" title="Lock aspect ratio">🔒</button>
+    <!-- 01 LOAD -->
+    <section class="card" id="secLoad">
+      <header><i class="step">01</i><h2>Load images</h2><span class="hint" id="loadHint">0 files</span></header>
+      <div class="body">
+        <div id="drop">
+          <div class="ic">⬒</div>
+          <div class="lead">Drop images or folders here</div>
+          <div class="sub">JPG · PNG · WebP · AVIF · GIF · BMP · SVG · ICO<br>500 at a time is comfortable · 2000 max</div>
+        </div>
+        <div class="addrow">
+          <button class="btn" id="btnAddFiles">＋ Choose files</button>
+          <button class="btn" id="btnAddFolder">🗀 Add a folder</button>
+        </div>
+        <div class="file-inputs">
+          <input type="file" id="fileInput" multiple accept="image/*,.jpg,.jpeg,.jfif,.png,.apng,.webp,.avif,.gif,.bmp,.dib,.ico,.svg,.tif,.tiff,.heic,.heif">
+          <input type="file" id="folderInput" webkitdirectory directory multiple>
         </div>
       </div>
-      <div class="field">
-        <label>Sharpen</label>
-        <div class="checkrow" style="margin-top:0">
-          <input type="checkbox" id="sharpen" checked>
-          <label for="sharpen">Apply after upscale</label>
+    </section>
+
+    <!-- 02 RESIZE -->
+    <section class="card" id="secResize">
+      <header><i class="step">02</i><h2>Resize</h2><span class="chip req">required</span><span class="hint" id="resizeHint"></span></header>
+      <div class="body">
+        <div class="seg" id="modeSeg">
+          <label><input type="radio" name="rmode" value="pixels" checked><span>In Pixels</span></label>
+          <label><input type="radio" name="rmode" value="percent"><span>In Percentage</span></label>
+          <label><input type="radio" name="rmode" value="print"><span>In Print Size</span></label>
+          <label><input type="radio" name="rmode" value="oneside"><span>Based on one side</span></label>
         </div>
-      </div>
-      <div class="field">
-        <label>Format</label>
-        <select id="format">
-          <option value="image/png">PNG (lossless)</option>
-          <option value="image/jpeg" selected>JPEG</option>
-          <option value="image/webp">WebP</option>
-        </select>
-      </div>
-      <div class="field" id="qualityField">
-        <label>Quality — <span class="rangeval" id="qualityVal">90%</span></label>
-        <input type="range" id="quality" min="10" max="100" value="90">
-      </div>
-    </div>
-  </section>
+        <div class="sep"></div>
 
-  <section class="panel">
-    <h2>03 — Queue <span id="gridCount" style="color:var(--muted); text-transform:none; font-weight:400;"></span></h2>
-    <div id="grid"></div>
-    <div class="empty-note" id="emptyNote">No photos loaded yet.</div>
-  </section>
+        <div id="paneP">
+          <div style="display:flex;gap:10px;align-items:flex-end;">
+            <div class="field"><label>New Width <i class="i" data-tip="Target width in pixels. With Preserve Aspect Ratio on, this acts as a maximum — the image is fitted inside Width × Height without ever being stretched."></i></label><input type="number" id="pxW" value="3000" min="1" max="32767"></div>
+            <div class="field"><label>New Height <i class="i" data-tip="Target height in pixels. With Preserve Aspect Ratio on, this acts as a maximum — the image is fitted inside Width × Height without ever being stretched."></i></label><input type="number" id="pxH" value="2000" min="1" max="32767"></div>
+            <button class="linkbtn on" id="pxLink" title="Link width & height to the first image's shape">🔗</button>
+          </div>
+        </div>
 
-  <div class="actions">
-    <button class="primary" id="processBtn" disabled>Process all</button>
-    <button class="secondary" id="zipBtn" disabled>Download all as ZIP</button>
-    <button class="secondary" id="clearBtn" disabled>Clear queue</button>
-    <span class="count" id="statusCount"></span>
+        <div id="panePct" hidden>
+          <div style="display:flex;gap:10px;align-items:flex-end;">
+            <div class="field"><label>Width % <i class="i" data-tip="Scales relative to each image's own size, so 200% doubles every image whatever its original dimensions."></i></label><input type="number" id="pctW" value="200" min="1" max="2000"></div>
+            <div class="field"><label>Height % <i class="i" data-tip="Vertical scale. Keep it linked to Width % unless you deliberately want to stretch the image."></i></label><input type="number" id="pctH" value="200" min="1" max="2000"></div>
+            <button class="linkbtn on" id="pctLink" title="Keep both percentages equal">🔗</button>
+          </div>
+        </div>
+
+        <div id="panePrint" hidden>
+          <div class="grid2">
+            <div class="field"><label>New Width <i class="i" data-tip="Physical print width. Pixels = width × DPI, so 24 inch at 300 DPI gives 7200 px."></i></label><input type="number" id="prW" value="24" min="0.1" step="0.01"></div>
+            <div class="field"><label>New Height <i class="i" data-tip="Physical print height. Pixels = height × DPI, so 36 inch at 300 DPI gives 10800 px."></i></label><input type="number" id="prH" value="36" min="0.1" step="0.01"></div>
+          </div>
+          <div class="grid2" style="margin-top:12px;">
+            <div class="field"><label>Unit <i class="i" data-tip="Inch, centimetre or millimetre — only changes how the two numbers above are read."></i></label>
+              <select id="prUnit"><option value="inch">inch</option><option value="cm">cm</option><option value="mm">mm</option></select></div>
+            <div class="field"><label>Resolution (DPI) <i class="i" data-tip="Dots per inch. 300 is standard for photo prints, 150 for big posters seen from a distance, 72 for screen. Higher DPI means far more pixels and slower processing."></i></label>
+              <select id="prDpi"><option>72</option><option>96</option><option>150</option><option>200</option><option selected>300</option><option>600</option></select></div>
+          </div>
+          <div class="chk"><input type="checkbox" id="chkStampDpi" checked><label for="chkStampDpi">Write the DPI into the file itself</label>
+            <i class="i" data-tip="Embeds the real resolution tag (JFIF density for JPEG, pHYs for PNG) so print labs and Photoshop open the file at the right physical size instead of assuming 72 DPI."></i></div>
+          <div class="note" id="printPxNote"></div>
+        </div>
+
+        <div id="paneSide" hidden>
+          <div class="grid2">
+            <div class="field"><label>Side to fix <i class="i" data-tip="Pick which edge gets the exact value. The other edge follows automatically so nothing is distorted. 'Long side' adapts per image, which is ideal for mixed portrait and landscape batches."></i></label>
+              <select id="sideMode"><option value="long">Long side</option><option value="short">Short side</option><option value="w">Width</option><option value="h">Height</option></select></div>
+            <div class="field"><label>Size in pixels <i class="i" data-tip="The exact pixel length that the chosen side will end up with."></i></label><input type="number" id="sideValue" value="4000" min="1" max="32767"></div>
+          </div>
+        </div>
+
+        <div class="sep"></div>
+        <div class="field"><label>Resampling filter <i class="i" data-tip="Nearest keeps hard pixel blocks (pixel art). Bilinear is soft and fast. Bicubic is the balanced default. Lanczos3 is the sharpest for enlargements but slowest. Canvas Smooth is GPU-accelerated and kicks in automatically for very large outputs."></i></label>
+          <select id="filterSel">
+            <option value="nearest">Nearest — hard edges / pixel art</option>
+            <option value="bilinear">Bilinear — soft &amp; fast</option>
+            <option value="bicubic" selected>Bicubic — balanced (recommended)</option>
+            <option value="lanczos">Lanczos3 — sharpest, slowest</option>
+            <option value="canvas">Canvas Smooth — fastest, GPU</option>
+          </select></div>
+
+        <div class="field" style="margin-top:13px;"><label>Sharpen after resize <i class="i" data-tip="Unsharp masking that restores the crispness any enlargement softens. 30–60% suits photos; use 0 for graphics and screenshots. Skipped automatically on enormous outputs to protect memory."></i></label>
+          <div class="rng"><input type="range" id="sharpen" min="0" max="100" value="35"><span class="rngval" id="sharpenVal">35%</span></div></div>
+
+        <div class="sep"></div>
+        <div class="chk"><input type="checkbox" id="chkSwitchLong"><label for="chkSwitchLong">Switch Width and Height to match long sides</label>
+          <i class="i" data-tip="If a portrait photo meets a landscape target (or the reverse), the target's width and height swap for that image, so portraits and landscapes both fill the frame properly."></i></div>
+        <div class="chk"><input type="checkbox" id="chkPreserve" checked><label for="chkPreserve">Preserve Aspect Ratio</label>
+          <i class="i" data-tip="Never stretch. The image is fitted inside your Width × Height box, so the result may be smaller than requested on one axis. Switch off to force exact dimensions, which distorts."></i></div>
+        <div class="chk"><input type="checkbox" id="chkCrop"><label for="chkCrop">Smart-Cropping (result in exact width and height)</label>
+          <i class="i" data-tip="Scales up until the frame is fully covered, then trims the overflow evenly from both sides. You always get the exact size, at the cost of a little content at the edges."></i></div>
+        <div class="chk"><input type="checkbox" id="chkFill"><label for="chkFill">Smart-Filling (result in exact width and height)</label>
+          <i class="i" data-tip="Fits the whole image inside the frame and pads the leftover space with the colour below. Exact size with nothing cropped away — letterbox bars instead."></i></div>
+        <div class="chk"><input type="checkbox" id="chkSkipSmall"><label for="chkSkipSmall">Do not resize if image is already smaller than requested size</label>
+          <i class="i" data-tip="Protects small originals from being blown up. Those files pass through at their native size but are still converted to your chosen output format."></i></div>
+        <div class="field" id="fillColorRow" style="margin-top:10px;" hidden>
+          <label>Fill colour <i class="i" data-tip="Colour used for the padding bars that Smart-Filling adds."></i></label>
+          <input type="color" id="fillColor" value="#000000"></div>
+      </div>
+    </section>
+
+    <!-- 03 ENHANCE -->
+    <section class="card" id="secEnhance">
+      <header><i class="step">03</i><h2>Enhance</h2><span class="chip opt">optional</span><span class="hint" id="enhHint"></span></header>
+      <div class="body">
+        <div class="field"><label>Repair pixelated / low-quality images <i class="i" data-tip="Cleans the picture BEFORE enlarging it: an edge-preserving filter removes JPEG blocking and pixel noise while keeping real edges crisp, then the enlargement runs, then edge-aware sharpening lifts genuine detail without amplifying grain. This is classical image processing, not AI super-resolution — it will not invent detail that was never captured, but it makes pixelated and heavily compressed sources look markedly cleaner."></i></label>
+          <select id="enhance">
+            <option value="0" selected>Off — plain resize</option>
+            <option value="1">Light — mild clean-up</option>
+            <option value="2">Medium — recommended for pixelated photos</option>
+            <option value="3">Strong — heavy JPEG artefacts</option>
+          </select></div>
+        <div class="note">Enhance replaces the plain Sharpen slider with edge-aware sharpening. Use <b>Preview</b> on a single image to judge the strength before running the whole batch — Strong can look plasticky on already-clean photos.</div>
+      </div>
+    </section>
+
+    <!-- 04 OUTPUT -->
+    <section class="card" id="secOutput">
+      <header><i class="step">04</i><h2>Format, weight &amp; naming</h2><span class="chip opt">optional</span></header>
+      <div class="body">
+        <div class="grid2">
+          <div class="field"><label>Format <i class="i" data-tip="Keep original re-encodes each file in its own format. JPEG is smallest for photos, PNG is lossless, WebP and AVIF give the best quality per kilobyte for the web."></i></label>
+            <select id="outFormat">
+              <option value="keep">Keep original format</option>
+              <option value="image/jpeg" selected>JPEG (.jpg)</option>
+              <option value="image/png">PNG (.png) — lossless</option>
+              <option value="image/webp">WebP (.webp)</option>
+              <option value="image/avif">AVIF (.avif)</option>
+            </select></div>
+          <div class="field" id="qualityRow"><label>Quality <i class="i" data-tip="Compression quality for lossy formats. 90% is visually lossless for most photos; below 70% artefacts start to show. Ignored for PNG, and overridden when a target file size is set."></i></label>
+            <div class="rng"><input type="range" id="quality" min="10" max="100" value="92"><span class="rngval" id="qualityVal">92%</span></div></div>
+        </div>
+
+        <div class="sep"></div>
+        <div class="field"><label>File weight control <i class="i" data-tip="Keep under X hunts for the highest quality that still fits your limit — perfect for upload caps like 'max 2 MB per photo'. Aim for X targets a size in both directions. Enlarger encodes the image repeatedly, narrowing in on the number, so this makes a batch noticeably slower."></i></label>
+          <select id="targetMode">
+            <option value="off" selected>Off — use the quality slider</option>
+            <option value="max">Keep every file under…</option>
+            <option value="exact">Aim for about…</option>
+          </select></div>
+        <div id="targetBox" hidden>
+          <div style="display:flex;gap:10px;margin-top:12px;align-items:flex-end;">
+            <div class="field"><label>Size <i class="i" data-tip="The weight limit each output file is squeezed to."></i></label><input type="number" id="targetVal" value="2" min="1" step="0.1"></div>
+            <div class="field"><label>Unit</label><select id="targetUnit"><option value="1048576" selected>MB</option><option value="1024">KB</option></select></div>
+          </div>
+          <div class="chk"><input type="checkbox" id="chkShrinkFit" checked><label for="chkShrinkFit">Shrink dimensions if quality alone cannot reach it</label>
+            <i class="i" data-tip="If even the lowest usable quality is still too heavy, the image is progressively scaled down until it fits. Guarantees the limit is met, at the cost of some resolution."></i></div>
+          <div class="note warn" id="targetNote">Needs a lossy format — JPEG, WebP or AVIF. PNG is ignored.</div>
+        </div>
+
+        <div class="sep"></div>
+        <div class="chk"><input type="checkbox" id="chkRename"><label for="chkRename">Rename output files</label>
+          <i class="i" data-tip="Bulk-rename with a pattern, or click any filename in the queue to rename that single file by hand."></i></div>
+        <div id="renameBox" hidden>
+          <div style="display:flex;gap:10px;align-items:flex-end;">
+            <div class="field" style="flex:2;"><label>Pattern</label><input type="text" id="renamePattern" value="{name}_{w}x{h}"></div>
+            <div class="field" style="flex:1;"><label>Start at</label><input type="number" id="renameStart" value="1" min="0"></div>
+          </div>
+          <div class="note">Tokens: <b>{name}</b> · <b>###</b> counter · <b>{n}</b> · <b>{w}</b>/<b>{h}</b> new size · <b>{sw}</b>/<b>{sh}</b> original · <b>{date}</b> · <b>{time}</b></div>
+          <div class="note" id="renamePreview" style="color:var(--accent);"></div>
+        </div>
+
+        <div class="sep"></div>
+        <div class="chk"><input type="checkbox" id="chkUpperExt"><label for="chkUpperExt">Use UPPERCASE for file extension</label>
+          <i class="i" data-tip="Writes photo.JPG instead of photo.jpg. Purely cosmetic, but some print shops and older cataloguing systems expect it."></i></div>
+        <div class="chk"><input type="checkbox" id="chkKeepDate" checked><label for="chkKeepDate">Keep original date / time attributes</label>
+          <i class="i" data-tip="Stamps each output with its source file's modified date. Works inside ZIP downloads. Browsers are not permitted to set timestamps when writing straight to a folder, so that mode keeps today's date."></i></div>
+        <div class="chk"><input type="checkbox" id="chkAskOverwrite" checked><label for="chkAskOverwrite">Ask before overwrite</label>
+          <i class="i" data-tip="When saving into a folder, stop and ask if a file of the same name already exists. Applies to the folder destination only — ZIP downloads never touch existing files."></i></div>
+        <div class="chk"><input type="checkbox" id="chkShowErrors" checked><label for="chkShowErrors">Display error messages</label>
+          <i class="i" data-tip="Pop up a notice the moment a file fails. Switch off to run silently — failures are still listed in red in the progress window."></i></div>
+      </div>
+    </section>
+
+    <!-- 05 DESTINATION -->
+    <section class="card" id="secDest">
+      <header><i class="step">05</i><h2>Save to</h2><span class="chip opt">optional</span></header>
+      <div class="body">
+        <div class="seg" id="destSeg">
+          <label><input type="radio" name="dest" value="folder" checked><span>A folder on my PC</span></label>
+          <label><input type="radio" name="dest" value="zip"><span>Download as ZIP</span></label>
+        </div>
+        <div id="folderBox" style="margin-top:13px;">
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button class="btn" id="btnPickFolder">🗀 Browse…</button>
+            <span class="qcount" id="folderLabel" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">no folder chosen</span>
+          </div>
+          <div class="note" id="fsaNote">Each image is written straight to disk as it finishes — the only way to handle hundreds of large files without running out of memory. Chrome, Edge and Opera on desktop.</div>
+        </div>
+        <div id="zipBox" style="margin-top:13px;" hidden>
+          <div class="field"><label>Split ZIP every <i class="i" data-tip="Very large ZIPs are built in memory and can crash the tab. Splitting produces enlarger_part1.zip, part2.zip and so on."></i></label>
+            <select id="zipSplit"><option value="0">Never split — one ZIP</option><option value="500">500 MB</option><option value="1024" selected>1 GB</option><option value="2048">2 GB</option></select></div>
+          <div class="note warn">For 500 big print-size images choose the folder option instead — ZIP has to hold everything in RAM.</div>
+        </div>
+        <div class="sep"></div>
+        <div class="field"><label>Parallel workers <i class="i" data-tip="How many images are processed at the same time. Auto picks a safe number from your CPU cores and lowers it by itself for huge outputs. Reduce it manually if your machine struggles."></i></label>
+          <select id="workersSel"><option value="0" selected>Auto</option><option>1</option><option>2</option><option>3</option><option>4</option><option>6</option><option>8</option></select></div>
+      </div>
+    </section>
   </div>
 
-</main>
-
-<footer>Runs entirely client-side via the Canvas API — safe to host as a static page (GitHub Pages, Hostinger static hosting, etc). No server or fees required for this mode.</footer>
-
-<script>
-const MAX_FILES = 10;
-let items = []; // {id, file, img, name, w, h, resultBlob, resultUrl, outW, outH}
-
-const drop = document.getElementById('drop');
-const fileInput = document.getElementById('fileInput');
-const grid = document.getElementById('grid');
-const emptyNote = document.getElementById('emptyNote');
-const gridCount = document.getElementById('gridCount');
-const processBtn = document.getElementById('processBtn');
-const zipBtn = document.getElementById('zipBtn');
-const clearBtn = document.getElementById('clearBtn');
-const statusCount = document.getElementById('statusCount');
-
-const modeSel = document.getElementById('mode');
-const scaleField = document.getElementById('scaleField');
-const widthField = document.getElementById('widthField');
-const scaleFactor = document.getElementById('scaleFactor');
-const targetWidth = document.getElementById('targetWidth');
-const targetHeight = document.getElementById('targetHeight');
-const lockRatio = document.getElementById('lockRatio');
-const sharpenChk = document.getElementById('sharpen');
-const formatSel = document.getElementById('format');
-const qualityField = document.getElementById('qualityField');
-const qualityInput = document.getElementById('quality');
-const qualityVal = document.getElementById('qualityVal');
-
-drop.addEventListener('click', () => fileInput.click());
-['dragenter','dragover'].forEach(evt => drop.addEventListener(evt, e => { e.preventDefault(); drop.classList.add('drag'); }));
-['dragleave','drop'].forEach(evt => drop.addEventListener(evt, e => { e.preventDefault(); drop.classList.remove('drag'); }));
-drop.addEventListener('drop', e => handleFiles(e.dataTransfer.files));
-fileInput.addEventListener('change', e => handleFiles(e.target.files));
-
-modeSel.addEventListener('change', () => {
-  const isScale = modeSel.value === 'scale';
-  scaleField.style.display = isScale ? '' : 'none';
-  widthField.style.display = isScale ? 'none' : '';
-});
-formatSel.addEventListener('change', () => {
-  qualityField.style.display = formatSel.value === 'image/png' ? 'none' : '';
-});
-qualityInput.addEventListener('input', () => qualityVal.textContent = qualityInput.value + '%');
-lockRatio.addEventListener('click', () => lockRatio.classList.toggle('active'));
-
-let ratioLockSrc = null;
-targetWidth.addEventListener('input', () => {
-  if (lockRatio.classList.contains('active') && ratioLockSrc) {
-    targetHeight.value = Math.round(targetWidth.value / ratioLockSrc);
-  }
-});
-targetHeight.addEventListener('input', () => {
-  if (lockRatio.classList.contains('active') && ratioLockSrc) {
-    targetWidth.value = Math.round(targetHeight.value * ratioLockSrc);
-  }
-});
-
-function handleFiles(fileList) {
-  const files = Array.from(fileList).filter(f => f.type.startsWith('image/'));
-  if (items.length + files.length > MAX_FILES) {
-    alert(`Max ${MAX_FILES} images at a time. You have ${items.length}, tried to add ${files.length}.`);
-  }
-  const room = MAX_FILES - items.length;
-  files.slice(0, room).forEach(file => {
-    const id = Math.random().toString(36).slice(2);
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-    img.onload = () => {
-      items.push({ id, file, img, name: file.name, w: img.naturalWidth, h: img.naturalHeight, resultBlob:null, resultUrl:null });
-      if (!ratioLockSrc) ratioLockSrc = img.naturalWidth / img.naturalHeight;
-      render();
-    };
-    img.src = url;
-  });
-  fileInput.value = '';
-}
-
-function removeItem(id) {
-  items = items.filter(it => it.id !== id);
-  render();
-}
-
-function render() {
-  grid.innerHTML = '';
-  emptyNote.style.display = items.length ? 'none' : '';
-  gridCount.textContent = items.length ? `(${items.length}/${MAX_FILES})` : '';
-  processBtn.disabled = items.length === 0;
-  zipBtn.disabled = !items.some(it => it.resultBlob);
-  clearBtn.disabled = items.length === 0;
-
-  items.forEach(it => {
-    const card = document.createElement('div');
-    card.className = 'card';
-    const outInfo = it.outW ? `${it.outW}×${it.outH}` : '—';
-    card.innerHTML = `
-      <img class="thumb" src="${it.img.src}">
-      <button class="remove" title="Remove">✕</button>
-      <div class="meta">
-        <div class="name">${it.name}</div>
-        <div class="dims">${it.w}×${it.h} → ${outInfo}</div>
-        <div class="status ${it.resultBlob ? 'done':''}">${it.resultBlob ? 'ready' : 'queued'}</div>
-        ${it.resultUrl ? `<a class="dl-link" download="${downloadName(it)}" href="${it.resultUrl}">↓ download</a>` : ''}
+  <div class="col right">
+    <section class="card" id="secQueue">
+      <header><i class="step">06</i><h2>Queue &amp; preview</h2><span class="hint" id="queueHint"></span></header>
+      <div class="qtools">
+        <span class="qcount" id="qCount"><b>0</b> images</span>
+        <div class="ab-spacer"></div>
+        <button class="btn ghost tiny" id="btnSelAll">☑ All</button>
+        <button class="btn ghost tiny" id="btnSelNone">☐ None</button>
+        <button class="btn ghost tiny" id="btnSelInv">⇄ Invert</button>
+        <button class="btn ghost tiny" id="btnView">▦ Grid</button>
+        <button class="btn ghost tiny" id="btnClearDone">Remove finished</button>
+        <button class="btn ghost tiny danger" id="btnClear">Clear all</button>
       </div>
-    `;
-    card.querySelector('.remove').addEventListener('click', () => removeItem(it.id));
-    grid.appendChild(card);
-  });
-}
+      <div class="selbar" id="selBar" hidden>
+        <span class="qcount"><b id="selCount">0</b> selected</span>
+        <div class="ab-spacer"></div>
+        <button class="btn tiny sel" id="btnApplySel">⚙ Apply current settings to these</button>
+        <button class="btn ghost tiny" id="btnClearOverride">Reset to global</button>
+        <button class="btn ghost tiny" id="btnPreviewSel">👁 Preview</button>
+        <button class="btn ghost tiny" id="btnConvertSel">▶ Convert these only</button>
+        <button class="btn ghost tiny danger" id="btnRemoveSel">✕ Remove</button>
+      </div>
+      <div id="queue"></div>
+      <div class="empty" id="emptyNote"><span class="big">📷</span>Nothing loaded yet.<br>Drop your photos into the box on the left — or hit <b>Take the tour</b> for a 60-second walkthrough.</div>
+    </section>
+  </div>
+</div>
 
-function downloadName(it) {
-  const ext = formatSel.value.split('/')[1].replace('jpeg','jpg');
-  const base = it.name.replace(/\.[^.]+$/, '');
-  return `${base}_${it.outW}x${it.outH}.${ext}`;
-}
+<footer class="site">Enlarger runs entirely client-side via Canvas, Web Workers and the File System Access API. Your images never leave the machine — there is no server for them to leave to.
+  <div class="credit"><span class="rule"></span>
+    <span class="sig"><span class="dot"></span>Designed &amp; built by <b>Omar Wanis</b></span>
+    <span class="rule r"></span></div>
+</footer>
 
-function computeTarget(it) {
-  if (modeSel.value === 'scale') {
-    const s = parseFloat(scaleFactor.value);
-    return { w: Math.round(it.w * s), h: Math.round(it.h * s) };
+<div class="actionbar">
+  <div class="actionbar-in">
+    <button class="btn primary" id="btnConvert" disabled>⟶ Convert</button>
+    <button class="btn" id="btnPreview" disabled>👁 Preview first image</button>
+    <div class="summary" id="abSummary">Load some images to begin.</div>
+    <div class="ab-spacer"></div>
+    <button class="btn" id="btnZipNow" disabled>⤓ Download results as ZIP</button>
+  </div>
+</div>
+
+<!-- progress -->
+<div class="backdrop" id="progressBack"><div class="modal">
+  <header><h3 id="pmTitle">Converting…</h3><span class="qcount" id="pmSub"></span>
+    <div class="x"><button class="btn ghost tiny" id="pmClose" hidden>✕ Close</button></div></header>
+  <div class="mbody"><table class="pt"><thead><tr>
+    <th style="width:42px">No.</th><th>Input file</th><th>Output file</th>
+    <th style="width:96px">Size</th><th style="width:92px">New size</th>
+    <th style="width:70px">Ratio</th><th style="width:100px">Status</th>
+  </tr></thead><tbody id="pmRows"></tbody></table></div>
+  <div class="mfoot">
+    <div class="bar"><i id="pmBar"></i></div>
+    <div class="stats">
+      <div><span>Progress</span><b id="stProgress">0 / 0</b></div>
+      <div><span>Old size</span><b id="stOld">0 KB</b></div>
+      <div><span>New size</span><b id="stNew">0 KB</b></div>
+      <div><span>Ratio</span><b id="stRatio">—</b></div>
+      <div><span>Saved</span><b id="stSaved">0 KB</b></div>
+      <div><span>Elapsed</span><b id="stElapsed">00:00:00</b></div>
+      <div><span>Remaining</span><b id="stEta">—</b></div>
+      <div><span>Failed</span><b id="stFail" class="good">0</b></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:13px;flex-wrap:wrap;">
+      <button class="btn danger" id="pmCancel">■ Stop</button>
+      <div class="ab-spacer"></div>
+      <button class="btn" id="pmPreview" hidden>👁 Preview results</button>
+      <button class="btn" id="pmZip" hidden>⤓ Download ZIP</button>
+      <button class="btn primary" id="pmDone" hidden style="padding:10px 24px;font-size:14px;">Done</button>
+    </div>
+  </div>
+</div></div>
+
+<!-- preview -->
+<div class="backdrop" id="pvBack"><div class="modal" style="max-width:1180px;">
+  <header><h3>Preview</h3><span class="qcount" id="pvName"></span>
+    <div class="x"><button class="btn ghost tiny" id="pvClose">✕ Close</button></div></header>
+  <div class="pvbar">
+    <button class="btn tiny" id="pvPrev">← Prev</button>
+    <span class="qcount" id="pvPos">1 / 1</span>
+    <button class="btn tiny" id="pvNext">Next →</button>
+    <div class="ab-spacer"></div>
+    <label class="qcount" style="display:flex;align-items:center;gap:6px;">Zoom
+      <select id="pvZoom" style="width:auto;padding:5px 26px 5px 8px;font-size:12px;">
+        <option value="fit" selected>Fit</option><option value="1">100%</option><option value="2">200%</option><option value="4">400%</option>
+      </select></label>
+    <button class="btn tiny" id="pvRedraw">↻ Re-render</button>
+  </div>
+  <div class="mbody" id="cmpWrap"><div class="spinner" id="pvSpin"></div>
+    <div id="cmpBox" hidden>
+      <span class="cmpTag" style="left:8px;">Original</span>
+      <span class="cmpTag" style="right:8px;">Enlarger</span>
+      <img id="cmpBefore" alt="original">
+      <div id="cmpAfter"><img id="cmpAfterImg" alt="result"></div>
+      <div id="cmpHandle"></div>
+    </div>
+  </div>
+  <div class="mfoot"><div class="pvinfo" id="pvInfo">—</div></div>
+</div></div>
+
+<!-- overwrite -->
+<div class="backdrop" id="owBack"><div class="modal dlg">
+  <header><h3>File already exists</h3></header>
+  <div class="mbody">The folder already contains <b id="owName"></b>. What should Enlarger do?</div>
+  <div class="mfoot">
+    <button class="btn" data-ow="skipall">Skip all</button><button class="btn" data-ow="skip">Skip</button>
+    <button class="btn" data-ow="rename">Keep both</button><button class="btn" data-ow="all">Overwrite all</button>
+    <button class="btn primary" data-ow="yes" style="padding:9px 18px;font-size:13.5px;">Overwrite</button>
+  </div>
+</div></div>
+
+<!-- error -->
+<div class="backdrop" id="errBack"><div class="modal dlg">
+  <header><h3 style="color:var(--err)">Could not process a file</h3></header>
+  <div class="mbody"><b id="errName"></b><div id="errMsg" style="margin-top:8px"></div></div>
+  <div class="mfoot"><button class="btn" id="errMute">Continue and stop asking</button>
+    <button class="btn primary" id="errOk" style="padding:9px 18px;font-size:13.5px;">Continue</button></div>
+</div></div>
+
+<!-- nothing-would-change guard -->
+<div class="backdrop" id="noopBack"><div class="modal dlg">
+  <header><h3 style="color:var(--warn)">⚠ Nothing would change</h3></header>
+  <div class="mbody">Every image would come out identical to the one you put in, so there is no point running this.
+    <div id="noopWhy" style="margin-top:12px"></div>
+    Change <b>at least one</b> setting and try again — one is enough, you do not need to touch the rest.</div>
+  <div class="mfoot">
+    <button class="btn ghost tiny" id="noopAnyway" style="margin-right:auto;opacity:.6">Convert anyway</button>
+    <button class="btn primary" id="noopOk" style="padding:9px 18px;font-size:13.5px;">Let me change something</button>
+  </div>
+</div></div>
+
+<div id="tourMask"><div id="tourHole"></div>
+  <div id="tourPop"><div class="tstep" id="tStep"></div><h4 id="tTitle"></h4><p id="tText"></p>
+    <div class="tnav"><div class="dots" id="tDots"></div>
+      <button class="btn ghost tiny" id="tSkip">Skip</button>
+      <button class="btn ghost tiny" id="tPrev">Back</button>
+      <button class="btn tiny" id="tNext" style="border-color:var(--accent);color:var(--accent);">Next →</button></div>
+  </div>
+</div>
+
+<div id="tip"></div>
+<div id="toasts"></div>
+<canvas id="confetti"></canvas>
+<script>
+/* ==========================================================
+   Enlarger v3 — bulk resize / enhance / convert, 100% client-side
+   ========================================================== */
+
+const MAX_FILES=2000, SOFT_FILES=500;
+const KERNEL_MAX=30e6, SHARPEN_MAX=40e6, DENOISE_MAX=12e6;
+
+const $=id=>document.getElementById(id);
+const state={items:[],seq:0,dir:null,running:false,cancel:false,
+  owAll:false,owSkipAll:false,muteErrors:false,view:'list',noopOK:false};
+
+/* ---------- geometry ---------- */
+function wkGeometry(sw,sh,s){
+  var tw,th;
+  if(s.mode==='percent'){tw=sw*s.pctW/100;th=sh*s.pctH/100;}
+  else if(s.mode==='print'){var f=s.unit==='inch'?1:(s.unit==='cm'?1/2.54:1/25.4);tw=s.printW*f*s.dpi;th=s.printH*f*s.dpi;}
+  else if(s.mode==='oneside'){
+    var base=s.sideMode;
+    if(base==='long')base=sw>=sh?'w':'h';
+    if(base==='short')base=sw>=sh?'h':'w';
+    if(base==='w'){tw=s.sideValue;th=sh*(s.sideValue/sw);}else{th=s.sideValue;tw=sw*(s.sideValue/sh);}
+  } else {tw=s.pxW;th=s.pxH;}
+  if(s.switchLong&&(s.mode==='pixels'||s.mode==='print')){
+    if((sw>=sh)!==(tw>=th)){var t=tw;tw=th;th=t;}
   }
-  return { w: parseInt(targetWidth.value,10), h: parseInt(targetHeight.value,10) };
+  tw=Math.max(1,Math.round(tw));th=Math.max(1,Math.round(th));
+  var g={skip:false,outW:0,outH:0,sx:0,sy:0,sW:sw,sH:sh,dx:0,dy:0,dW:0,dH:0};
+  if(s.skipSmaller&&sw<=tw&&sh<=th){g.skip=true;g.outW=sw;g.outH=sh;g.dW=sw;g.dH=sh;return g;}
+  var sc;
+  if(s.mode==='percent'||s.mode==='oneside'){g.outW=tw;g.outH=th;g.dW=tw;g.dH=th;}
+  else if(s.crop){
+    sc=Math.max(tw/sw,th/sh);g.outW=tw;g.outH=th;g.dW=tw;g.dH=th;
+    g.sW=Math.max(1,Math.min(sw,Math.round(tw/sc)));g.sH=Math.max(1,Math.min(sh,Math.round(th/sc)));
+    g.sx=Math.round((sw-g.sW)/2);g.sy=Math.round((sh-g.sH)/2);
+  }
+  else if(s.fill){
+    sc=Math.min(tw/sw,th/sh);g.outW=tw;g.outH=th;
+    g.dW=Math.max(1,Math.round(sw*sc));g.dH=Math.max(1,Math.round(sh*sc));
+    g.dx=Math.round((tw-g.dW)/2);g.dy=Math.round((th-g.dH)/2);
+  }
+  else if(s.preserveAspect){
+    sc=Math.min(tw/sw,th/sh);g.dW=Math.max(1,Math.round(sw*sc));g.dH=Math.max(1,Math.round(sh*sc));
+    g.outW=g.dW;g.outH=g.dH;
+  }
+  else {g.outW=tw;g.outH=th;g.dW=tw;g.dH=th;}
+  return g;
 }
 
-// simple unsharp-mask style sharpen convolution
-function sharpenCanvas(ctx, w, h) {
-  const img = ctx.getImageData(0,0,w,h);
-  const src = img.data;
-  const out = new Uint8ClampedArray(src.length);
-  const kernel = [0,-1,0,-1,5,-1,0,-1,0];
-  for (let y=0; y<h; y++){
-    for (let x=0; x<w; x++){
-      for (let c=0;c<3;c++){
-        let sum=0, k=0;
-        for (let ky=-1; ky<=1; ky++){
-          for (let kx=-1; kx<=1; kx++){
-            const yy = Math.min(h-1, Math.max(0, y+ky));
-            const xx = Math.min(w-1, Math.max(0, x+kx));
-            sum += src[(yy*w+xx)*4+c] * kernel[k++];
-          }
-        }
-        out[(y*w+x)*4+c] = sum;
+/* ---------- resampling kernels ---------- */
+function wkWeights(srcLen,dstLen,filter){
+  var kernel,support;
+  if(filter==='nearest'){support=.5;kernel=function(x){return(x>=-.5&&x<.5)?1:0;};}
+  else if(filter==='bilinear'){support=1;kernel=function(x){x=Math.abs(x);return x<1?1-x:0;};}
+  else if(filter==='lanczos'){support=3;kernel=function(x){x=Math.abs(x);if(x<1e-6)return 1;if(x>=3)return 0;
+    var p=Math.PI*x;return 3*Math.sin(p)*Math.sin(p/3)/(p*p);};}
+  else{support=2;kernel=function(x){x=Math.abs(x);var a=x*x,b=a*x;
+    if(x<=1)return 1.5*b-2.5*a+1;if(x<2)return -0.5*b+2.5*a-4*x+2;return 0;};}
+  var scale=dstLen/srcLen,inv=1/scale,fs=scale<1?scale:1,fsup=support/fs;
+  var out=new Array(dstLen);
+  for(var i=0;i<dstLen;i++){
+    var c=(i+.5)*inv-.5,st=Math.ceil(c-fsup),en=Math.floor(c+fsup);
+    var idx=[],wts=[],sum=0;
+    for(var j=st;j<=en;j++){
+      var w=kernel((j-c)*fs);if(w===0)continue;
+      idx.push(j<0?0:(j>srcLen-1?srcLen-1:j));wts.push(w);sum+=w;
+    }
+    if(sum)for(var k=0;k<wts.length;k++)wts[k]/=sum;
+    out[i]={idx:idx,wts:wts};
+  }
+  return out;
+}
+function wkResample(src,sw,sh,dw,dh,filter){
+  var hw=wkWeights(sw,dw,filter),tmp=new Uint8ClampedArray(dw*sh*4);
+  var x,y,k,o,p,r,g,b,a,al,ww,W,idx,wts;
+  for(y=0;y<sh;y++){
+    var sr=y*sw*4,dr=y*dw*4;
+    for(x=0;x<dw;x++){
+      W=hw[x];idx=W.idx;wts=W.wts;r=g=b=a=0;
+      for(k=0;k<idx.length;k++){p=sr+idx[k]*4;ww=wts[k];al=src[p+3];
+        r+=src[p]*al*ww;g+=src[p+1]*al*ww;b+=src[p+2]*al*ww;a+=al*ww;}
+      o=dr+x*4;if(a>0){tmp[o]=r/a;tmp[o+1]=g/a;tmp[o+2]=b/a;}tmp[o+3]=a;
+    }
+  }
+  var vw=wkWeights(sh,dh,filter),dst=new Uint8ClampedArray(dw*dh*4);
+  for(y=0;y<dh;y++){
+    W=vw[y];idx=W.idx;wts=W.wts;var orow=y*dw*4;
+    for(x=0;x<dw;x++){
+      r=g=b=a=0;
+      for(k=0;k<idx.length;k++){p=idx[k]*dw*4+x*4;ww=wts[k];al=tmp[p+3];
+        r+=tmp[p]*al*ww;g+=tmp[p+1]*al*ww;b+=tmp[p+2]*al*ww;a+=al*ww;}
+      o=orow+x*4;if(a>0){dst[o]=r/a;dst[o+1]=g/a;dst[o+2]=b/a;}dst[o+3]=a;
+    }
+  }
+  return dst;
+}
+
+/* ---------- plain unsharp mask ---------- */
+function wkSharpen(data,w,h,amount){
+  if(amount<=0)return data;
+  var amt=amount/100*1.6,out=new Uint8ClampedArray(data),st=w*4;
+  for(var y=1;y<h-1;y++)for(var x=1;x<w-1;x++){
+    var i=y*st+x*4;
+    for(var c=0;c<3;c++){var p=i+c;
+      var bl=(data[p-st-4]+data[p-st]+data[p-st+4]+data[p-4]+data[p]+data[p+4]+
+              data[p+st-4]+data[p+st]+data[p+st+4])/9;
+      out[p]=data[p]+(data[p]-bl)*amt;}
+  }
+  return out;
+}
+
+/* ---------- ENHANCE: edge-preserving denoise (bilateral) ---------- */
+function wkDenoise(data,w,h,level){
+  var r=level>=2?2:1;
+  var sr=level===1?14:(level===2?22:34);
+  var inv2sr2=1/(2*sr*sr),inv2ss2=1/(2*r*r);
+  var sp=[],dy,dx;
+  for(dy=-r;dy<=r;dy++)for(dx=-r;dx<=r;dx++)sp.push(Math.exp(-(dx*dx+dy*dy)*inv2ss2));
+  var lut=new Float32Array(4096);
+  for(var q=0;q<4096;q++)lut[q]=Math.exp(-(q*8)*inv2sr2);
+  var out=new Uint8ClampedArray(data),st=w*4;
+  for(var y=0;y<h;y++)for(var x=0;x<w;x++){
+    var i=y*st+x*4,cr=data[i],cg=data[i+1],cb=data[i+2];
+    var sR=0,sG=0,sB=0,wsum=0,k=0;
+    for(dy=-r;dy<=r;dy++){
+      var yy=y+dy;if(yy<0)yy=0;else if(yy>h-1)yy=h-1;
+      for(dx=-r;dx<=r;dx++){
+        var xx=x+dx;if(xx<0)xx=0;else if(xx>w-1)xx=w-1;
+        var p=yy*st+xx*4;
+        var dr=data[p]-cr,dg=data[p+1]-cg,db=data[p+2]-cb;
+        var di=((dr*dr+dg*dg+db*db)*0.0416666)|0;if(di>4095)di=4095;
+        var wg=sp[k++]*lut[di];
+        sR+=data[p]*wg;sG+=data[p+1]*wg;sB+=data[p+2]*wg;wsum+=wg;
       }
-      out[(y*w+x)*4+3] = src[(y*w+x)*4+3];
     }
+    out[i]=sR/wsum;out[i+1]=sG/wsum;out[i+2]=sB/wsum;
   }
-  img.data.set(out);
-  ctx.putImageData(img,0,0);
+  return out;
 }
 
-async function processAll() {
-  processBtn.disabled = true;
-  statusCount.textContent = 'Processing…';
-  for (let i=0;i<items.length;i++){
-    await processOne(items[i]);
-    statusCount.textContent = `Processed ${i+1}/${items.length}`;
-    render();
+/* ---------- ENHANCE: edge-aware sharpening ---------- */
+function wkAdaptiveSharpen(data,w,h,amount){
+  var amt=amount/100*1.9,out=new Uint8ClampedArray(data),st=w*4;
+  for(var y=1;y<h-1;y++)for(var x=1;x<w-1;x++){
+    var i=y*st+x*4;
+    var lL=data[i-4]*.299+data[i-3]*.587+data[i-2]*.114;
+    var lR=data[i+4]*.299+data[i+5]*.587+data[i+6]*.114;
+    var lU=data[i-st]*.299+data[i-st+1]*.587+data[i-st+2]*.114;
+    var lD=data[i+st]*.299+data[i+st+1]*.587+data[i+st+2]*.114;
+    var gx=lR-lL,gy=lD-lU,gm=Math.sqrt(gx*gx+gy*gy);
+    var k=amt*(gm/(gm+16));
+    if(k<=0.001)continue;
+    for(var c=0;c<3;c++){var p=i+c;
+      var bl=(data[p-st-4]+data[p-st]+data[p-st+4]+data[p-4]+data[p]+data[p+4]+
+              data[p+st-4]+data[p+st]+data[p+st+4])/9;
+      out[p]=data[p]+(data[p]-bl)*k;}
   }
-  statusCount.textContent = `Done — ${items.length} image(s) ready`;
-  processBtn.disabled = false;
+  return out;
 }
 
-function processOne(it) {
-  return new Promise(resolve => {
-    const {w, h} = computeTarget(it);
-    it.outW = w; it.outH = h;
-    const canvas = document.createElement('canvas');
-    canvas.width = w; canvas.height = h;
-    const ctx = canvas.getContext('2d');
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
+/* ---------- render one image ---------- */
+function wkRender(bmp,s,OC){
+  var sw=bmp.width,sh=bmp.height;
+  var g=s.forceGeom||wkGeometry(sw,sh,s);
+  var area=g.outW*g.outH;
+  if(g.outW>32767||g.outH>32767||area>250e6)
+    throw new Error('Output '+g.outW+'×'+g.outH+' exceeds the browser canvas limit');
 
-    // progressive upscale for smoother results on large scale factors
-    let srcCanvas = it.img;
-    let curW = it.w, curH = it.h;
-    const steps = [];
-    while (curW * 2 < w && curH * 2 < h) {
-      curW = Math.round(curW*2); curH = Math.round(curH*2);
-      steps.push([curW,curH]);
+  var enh=s.enhance|0;
+  var canvas=new OC(g.outW,g.outH),ctx=canvas.getContext('2d');
+  if(s.fill&&s.bg){ctx.fillStyle=s.bg;ctx.fillRect(0,0,g.outW,g.outH);}
+
+  var cropped=(g.sx||g.sy||g.sW!==sw||g.sH!==sh);
+  var useKernel=s.filter!=='canvas'&&area<=s.kernelMax&&(g.sW*g.sH)<=s.kernelMax;
+  var srcCanvas=null,sctx=null;
+
+  /* denoise the SOURCE before enlarging — that is where pixelation lives */
+  if(enh>0&&(g.sW*g.sH)<=DENOISE_MAX){
+    srcCanvas=new OC(g.sW,g.sH);sctx=srcCanvas.getContext('2d');
+    sctx.drawImage(bmp,g.sx,g.sy,g.sW,g.sH,0,0,g.sW,g.sH);
+    var sd=sctx.getImageData(0,0,g.sW,g.sH);
+    sd.data.set(wkDenoise(sd.data,g.sW,g.sH,enh));
+    sctx.putImageData(sd,0,0);
+  }
+
+  var sharpAmt=enh>0?(enh===1?32:enh===2?55:78):s.sharpen;
+  var doSharp=sharpAmt>0&&!g.skip;
+
+  if(useKernel){
+    if(!srcCanvas){srcCanvas=new OC(g.sW,g.sH);sctx=srcCanvas.getContext('2d');
+      sctx.drawImage(bmp,g.sx,g.sy,g.sW,g.sH,0,0,g.sW,g.sH);}
+    var px=sctx.getImageData(0,0,g.sW,g.sH).data;
+    if(g.sW!==g.dW||g.sH!==g.dH)px=wkResample(px,g.sW,g.sH,g.dW,g.dH,s.filter);
+    if(doSharp&&g.dW*g.dH<=s.sharpenMax)
+      px=enh>0?wkAdaptiveSharpen(px,g.dW,g.dH,sharpAmt):wkSharpen(px,g.dW,g.dH,sharpAmt);
+    var id=new ImageData(px,g.dW,g.dH);
+    if(g.dx===0&&g.dy===0&&!(s.fill&&s.bg))ctx.putImageData(id,0,0);
+    else{var tc=new OC(g.dW,g.dH);tc.getContext('2d').putImageData(id,0,0);ctx.drawImage(tc,g.dx,g.dy);}
+  } else {
+    var cur,cw,ch,ox,oy;
+    if(srcCanvas){cur=srcCanvas;cw=g.sW;ch=g.sH;ox=0;oy=0;}
+    else if(cropped){var c0=new OC(g.sW,g.sH);
+      c0.getContext('2d').drawImage(bmp,g.sx,g.sy,g.sW,g.sH,0,0,g.sW,g.sH);
+      cur=c0;cw=g.sW;ch=g.sH;ox=0;oy=0;}
+    else{cur=bmp;cw=sw;ch=sh;ox=0;oy=0;}
+    var smooth=s.filter!=='nearest';
+    if(smooth){
+      while(cw/2>=g.dW&&ch/2>=g.dH&&cw>2&&ch>2){
+        var nw=Math.max(1,cw>>1),nh=Math.max(1,ch>>1);
+        var cc=new OC(nw,nh),cx=cc.getContext('2d');
+        cx.imageSmoothingEnabled=true;cx.imageSmoothingQuality='high';
+        cx.drawImage(cur,ox,oy,cw,ch,0,0,nw,nh);
+        cur=cc;cw=nw;ch=nh;ox=0;oy=0;
+      }
+      if(g.dW*g.dH<=40e6){
+        while(cw*2<=g.dW&&ch*2<=g.dH){
+          var n2=cw*2,h2=ch*2,c2=new OC(n2,h2),x2=c2.getContext('2d');
+          x2.imageSmoothingEnabled=true;x2.imageSmoothingQuality='high';
+          x2.drawImage(cur,ox,oy,cw,ch,0,0,n2,h2);
+          cur=c2;cw=n2;ch=h2;ox=0;oy=0;
+        }
+      }
     }
-    let stepCanvas = document.createElement('canvas');
-    stepCanvas.width = it.w; stepCanvas.height = it.h;
-    let stepCtx = stepCanvas.getContext('2d');
-    stepCtx.drawImage(it.img,0,0);
-
-    steps.forEach(([sw,sh]) => {
-      const next = document.createElement('canvas');
-      next.width = sw; next.height = sh;
-      const nctx = next.getContext('2d');
-      nctx.imageSmoothingEnabled = true;
-      nctx.imageSmoothingQuality = 'high';
-      nctx.drawImage(stepCanvas,0,0,sw,sh);
-      stepCanvas = next; stepCtx = nctx;
-    });
-
-    ctx.drawImage(stepCanvas, 0,0, stepCanvas.width, stepCanvas.height, 0,0,w,h);
-
-    if (sharpenChk.checked) {
-      sharpenCanvas(ctx, w, h);
+    ctx.imageSmoothingEnabled=smooth;ctx.imageSmoothingQuality='high';
+    ctx.drawImage(cur,ox,oy,cw,ch,g.dx,g.dy,g.dW,g.dH);
+    if(doSharp&&area<=s.sharpenMax){
+      var im=ctx.getImageData(0,0,g.outW,g.outH);
+      im.data.set(enh>0?wkAdaptiveSharpen(im.data,g.outW,g.outH,sharpAmt)
+                       :wkSharpen(im.data,g.outW,g.outH,sharpAmt));
+      ctx.putImageData(im,0,0);
     }
+  }
+  return {canvas:canvas,g:g,sw:sw,sh:sh};
+}
 
-    const fmt = formatSel.value;
-    const q = fmt === 'image/png' ? undefined : qualityInput.value/100;
-    canvas.toBlob(blob => {
-      if (it.resultUrl) URL.revokeObjectURL(it.resultUrl);
-      it.resultBlob = blob;
-      it.resultUrl = URL.createObjectURL(blob);
-      resolve();
-    }, fmt, q);
+/* ---------- encoding, with optional file-weight targeting ---------- */
+function wkEncodeOnce(canvas,type,q){
+  if(canvas.convertToBlob){var o={type:type};if(type!=='image/png')o.quality=q;return canvas.convertToBlob(o);}
+  return new Promise(function(r){canvas.toBlob(r,type,type==='image/png'?undefined:q);});
+}
+async function wkEncode(canvas,s,OC){
+  var type=s.outType,W=canvas.width,H=canvas.height;
+  if(s.targetMode==='off'||type==='image/png')
+    return {blob:await wkEncodeOnce(canvas,type,s.quality),w:W,h:H,tries:1};
+  var target=s.targetBytes,tries=1;
+  var top=await wkEncodeOnce(canvas,type,0.97);
+  if(top.size<=target&&s.targetMode==='max')return {blob:top,w:W,h:H,tries:tries};
+  var lo=0.04,hi=0.97,best=top.size<=target?top:null;
+  for(var i=0;i<9;i++){
+    var mid=(lo+hi)/2;
+    var b=await wkEncodeOnce(canvas,type,mid);tries++;
+    if(b.size>target)hi=mid;else{best=b;lo=mid;}
+    if(best&&Math.abs(best.size-target)/target<0.035)break;
+  }
+  if(!best){best=await wkEncodeOnce(canvas,type,0.04);tries++;}
+  if(best.size>target&&s.shrinkFit){
+    var sc=1,cw=W,chh=H;
+    for(var k=0;k<9&&best.size>target;k++){
+      sc*=0.85;
+      var nw=Math.max(24,Math.round(W*sc)),nh=Math.max(24,Math.round(H*sc));
+      var c2=new OC(nw,nh),x2=c2.getContext('2d');
+      x2.imageSmoothingEnabled=true;x2.imageSmoothingQuality='high';
+      x2.drawImage(canvas,0,0,nw,nh);
+      var lo2=0.04,hi2=0.95,b2=null;
+      for(var j=0;j<6;j++){
+        var m2=(lo2+hi2)/2,t2=await wkEncodeOnce(c2,type,m2);tries++;
+        if(t2.size>target)hi2=m2;else{b2=t2;lo2=m2;}
+      }
+      if(b2){best=b2;cw=nw;chh=nh;}
+      if(best.size<=target)return {blob:best,w:cw,h:chh,tries:tries,shrunk:true,over:false};
+    }
+    return {blob:best,w:cw,h:chh,tries:tries,shrunk:true,over:best.size>target};
+  }
+  return {blob:best,w:W,h:H,tries:tries,over:best.size>target};
+}
+
+/* ---------- worker entry ---------- */
+function wkMain(){
+  self.onmessage=async function(ev){
+    var m=ev.data,id=m.id;
+    var send=function(o){o.id=id;self.postMessage(o);};
+    try{
+      send({type:'stage',stage:'decode'});
+      var bmp;
+      try{bmp=await createImageBitmap(m.file);}
+      catch(e){throw new Error('This file could not be decoded by the browser ('+(m.file.type||'unknown format')+')');}
+      send({type:'stage',stage:m.settings.enhance>0?'enhance':'resize'});
+      var r=wkRender(bmp,m.settings,OffscreenCanvas);
+      bmp.close();
+      send({type:'stage',stage:m.settings.targetMode!=='off'?'fitting size':'encode'});
+      var e=await wkEncode(r.canvas,m.settings,OffscreenCanvas);
+      send({type:'done',blob:e.blob,outW:e.w,outH:e.h,srcW:r.sw,srcH:r.sh,
+            skipped:r.g.skip,shrunk:!!e.shrunk,over:!!e.over,tries:e.tries,actualType:e.blob.type});
+    }catch(err){send({type:'error',message:(err&&err.message)?err.message:String(err)});}
+  };
+}
+
+const WORKER_SRC=[wkGeometry,wkWeights,wkResample,wkSharpen,wkDenoise,wkAdaptiveSharpen,
+  wkRender,wkEncodeOnce,wkEncode,wkMain].map(f=>f.toString()).join('\n')+
+  '\nvar DENOISE_MAX='+DENOISE_MAX+';\nwkMain();';
+
+const HAS_WORKERS=(typeof Worker!=='undefined')&&(typeof OffscreenCanvas!=='undefined');
+let workerURL=null;
+function makeWorker(){
+  if(!workerURL)workerURL=URL.createObjectURL(new Blob([WORKER_SRC],{type:'text/javascript'}));
+  return new Worker(workerURL);
+}
+
+/* ---------- DPI metadata ---------- */
+const CRC_TABLE=(()=>{const t=new Uint32Array(256);
+  for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1);t[n]=c>>>0;}
+  return t;})();
+const crc32=(b,s,e)=>{let c=0xFFFFFFFF;for(let i=s;i<e;i++)c=CRC_TABLE[(c^b[i])&0xFF]^(c>>>8);return (c^0xFFFFFFFF)>>>0;};
+function jpegSetDpi(buf,dpi){
+  if(buf[0]!==0xFF||buf[1]!==0xD8)return buf;
+  let i=2;
+  while(i<buf.length-4){
+    if(buf[i]!==0xFF)break;
+    const mk=buf[i+1],len=(buf[i+2]<<8)|buf[i+3];
+    if(mk===0xE0&&buf[i+4]===0x4A&&buf[i+5]===0x46&&buf[i+6]===0x49&&buf[i+7]===0x46){
+      buf[i+11]=1;buf[i+12]=(dpi>>8)&255;buf[i+13]=dpi&255;buf[i+14]=(dpi>>8)&255;buf[i+15]=dpi&255;return buf;
+    }
+    if(mk===0xDA||mk===0xD9)break;
+    i+=2+len;
+  }
+  const seg=new Uint8Array([0xFF,0xE0,0,0x10,0x4A,0x46,0x49,0x46,0,1,1,1,(dpi>>8)&255,dpi&255,(dpi>>8)&255,dpi&255,0,0]);
+  const out=new Uint8Array(buf.length+seg.length);
+  out.set(buf.subarray(0,2),0);out.set(seg,2);out.set(buf.subarray(2),2+seg.length);
+  return out;
+}
+function pngSetDpi(buf,dpi){
+  const ppm=Math.round(dpi/0.0254),chunk=new Uint8Array(21),dv=new DataView(chunk.buffer);
+  dv.setUint32(0,9);chunk.set([0x70,0x48,0x59,0x73],4);
+  dv.setUint32(8,ppm);dv.setUint32(12,ppm);chunk[16]=1;dv.setUint32(17,crc32(chunk,4,17));
+  const parts=[buf.subarray(0,8)];let i=8,ins=false;
+  while(i<buf.length){
+    const len=new DataView(buf.buffer,buf.byteOffset+i,4).getUint32(0);
+    const nm=String.fromCharCode(buf[i+4],buf[i+5],buf[i+6],buf[i+7]),tot=12+len;
+    if(nm==='pHYs'){i+=tot;continue;}
+    if(nm==='IDAT'&&!ins){parts.push(chunk);ins=true;}
+    parts.push(buf.subarray(i,i+tot));i+=tot;
+  }
+  let sz=0;parts.forEach(p=>sz+=p.length);
+  const out=new Uint8Array(sz);let off=0;parts.forEach(p=>{out.set(p,off);off+=p.length;});
+  return out;
+}
+async function stampDpi(blob,dpi){
+  try{
+    const buf=new Uint8Array(await blob.arrayBuffer());
+    if(blob.type==='image/jpeg')return new Blob([jpegSetDpi(buf,dpi)],{type:blob.type});
+    if(blob.type==='image/png')return new Blob([pngSetDpi(buf,dpi)],{type:blob.type});
+  }catch(e){}
+  return blob;
+}
+
+/* ---------- helpers ---------- */
+const fmtBytes=b=>{if(b==null)return '—';
+  if(b<1024)return b+' B';
+  if(b<1048576)return (b/1024).toFixed(b<10240?1:0)+' KB';
+  if(b<1073741824)return (b/1048576).toFixed(1)+' MB';
+  return (b/1073741824).toFixed(2)+' GB';};
+const fmtClock=ms=>{if(!isFinite(ms)||ms<0)return '—';
+  const s=Math.floor(ms/1000);
+  return [Math.floor(s/3600),Math.floor(s%3600/60),s%60].map(n=>String(n).padStart(2,'0')).join(':');};
+const EXT_OF={'image/jpeg':'jpg','image/png':'png','image/webp':'webp','image/avif':'avif',
+  'image/gif':'gif','image/bmp':'bmp','image/x-icon':'ico','image/svg+xml':'svg'};
+const splitName=n=>{const i=n.lastIndexOf('.');return i>0?[n.slice(0,i),n.slice(i+1)]:[n,''];};
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function toast(msg,kind,title){
+  const el=document.createElement('div');
+  el.className='toast'+(kind?' '+kind:'');
+  el.innerHTML=(title?'<b>'+title+'</b>':'')+msg;
+  $('toasts').appendChild(el);
+  setTimeout(()=>{el.style.opacity='0';el.style.transform='translateX(16px)';el.style.transition='.3s';},4200);
+  setTimeout(()=>el.remove(),4600);
+}
+
+/* ---------- settings ---------- */
+function readSettings(){
+  const mode=document.querySelector('input[name=rmode]:checked').value;
+  return {
+    mode,
+    pxW:+$('pxW').value||1, pxH:+$('pxH').value||1,
+    pctW:+$('pctW').value||100, pctH:+$('pctH').value||100,
+    printW:+$('prW').value||1, printH:+$('prH').value||1,
+    unit:$('prUnit').value, dpi:+$('prDpi').value||300,
+    sideMode:$('sideMode').value, sideValue:+$('sideValue').value||1,
+    filter:$('filterSel').value,
+    sharpen:+$('sharpen').value,
+    enhance:+$('enhance').value,
+    switchLong:$('chkSwitchLong').checked,
+    preserveAspect:$('chkPreserve').checked,
+    crop:$('chkCrop').checked,
+    fill:$('chkFill').checked,
+    skipSmaller:$('chkSkipSmall').checked,
+    bg:$('fillColor').value,
+    outType:$('outFormat').value,
+    quality:+$('quality').value/100,
+    targetMode:$('targetMode').value,
+    targetBytes:Math.round((+$('targetVal').value||1)*(+$('targetUnit').value)),
+    shrinkFit:$('chkShrinkFit').checked,
+    stampDpi:mode==='print'&&$('chkStampDpi').checked,
+    kernelMax:KERNEL_MAX, sharpenMax:SHARPEN_MAX
+  };
+}
+/* each item may carry its own frozen copy of the settings */
+function settingsFor(item){
+  const s=Object.assign({},item.override||readSettings());
+  if(s.outType==='keep'){
+    const t=item.file.type;
+    s.outType=(t==='image/jpeg'||t==='image/png'||t==='image/webp'||t==='image/avif')?t:'image/png';
+  }
+  if(s.targetMode!=='off'&&s.outType==='image/png')s.targetMode='off';
+  return s;
+}
+const selected=()=>state.items.filter(i=>i.sel);
+
+/* ---------- intake ---------- */
+const IMG_RE=/\.(jpe?g|jfif|png|apng|webp|avif|gif|bmp|dib|ico|svg|tiff?|heic|heif)$/i;
+function addFiles(list){
+  const incoming=Array.from(list).filter(f=>(f.type&&f.type.startsWith('image/'))||IMG_RE.test(f.name));
+  const rejected=list.length-incoming.length;
+  const room=MAX_FILES-state.items.length;
+  const take=incoming.slice(0,Math.max(0,room));
+  const seen=new Set(state.items.map(i=>i.file.name+'|'+i.file.size+'|'+i.file.lastModified));
+  let dupes=0,added=0;
+  for(const f of take){
+    const key=f.name+'|'+f.size+'|'+f.lastModified;
+    if(seen.has(key)){dupes++;continue;}
+    seen.add(key);
+    const [base,ext]=splitName(f.name);
+    state.items.push({id:++state.seq,file:f,base,srcExt:ext,custom:null,override:null,sel:false,
+      srcW:0,srcH:0,thumb:null,probed:false,probing:false,
+      status:'queued',stage:'',outName:'',outW:0,outH:0,outSize:0,
+      blob:null,url:null,error:null,shrunk:false});
+    added++;
+  }
+  render();
+  /* probe the first slice eagerly — dimensions drive the size preview, the aspect-ratio
+     lock and the "nothing would change" check, so they must not wait on scrolling */
+  state.items.slice(0,24).forEach(queueProbe);
+  if(rejected)toast(rejected+' non-image file'+(rejected>1?'s were':' was')+' ignored.','err','Skipped');
+  if(dupes)toast(dupes+' duplicate'+(dupes>1?'s':'')+' skipped.');
+  if(incoming.length>room)toast('Hard cap is '+MAX_FILES+' files — '+(incoming.length-room)+' left out.','err','Queue full');
+  else if(added&&state.items.length>SOFT_FILES)
+    toast(state.items.length+' images queued. Pick a destination folder rather than ZIP for a batch this big.',null,'Large batch');
+  if(added)$('secQueue').classList.add('tada'),setTimeout(()=>$('secQueue').classList.remove('tada'),800);
+}
+
+/* lazy thumbnails */
+const probeQueue=[];let probing=0;
+function queueProbe(it){if(it.probed||it.probing)return;it.probing=true;probeQueue.push(it);pumpProbe();}
+function pumpProbe(){
+  while(probing<3&&probeQueue.length){
+    const it=probeQueue.shift();probing++;
+    probeOne(it).catch(()=>{}).then(()=>{probing--;pumpProbe();});
+  }
+}
+async function probeOne(it){
+  try{
+    let bmp;
+    try{bmp=await createImageBitmap(it.file);}
+    catch(e){
+      const url=URL.createObjectURL(it.file),img=new Image();
+      await new Promise((res,rej)=>{img.onload=res;img.onerror=rej;img.src=url;});
+      it.srcW=img.naturalWidth;it.srcH=img.naturalHeight;it.thumb=url;it.probed=true;paintRow(it);return;
+    }
+    it.srcW=bmp.width;it.srcH=bmp.height;
+    const tw=140,th=Math.max(1,Math.round(bmp.height*(140/bmp.width)));
+    const c=document.createElement('canvas');c.width=tw;c.height=th;
+    c.getContext('2d').drawImage(bmp,0,0,tw,th);
+    bmp.close();
+    it.thumb=c.toDataURL('image/jpeg',.72);it.probed=true;paintRow(it);
+    if(state.items.indexOf(it)===0&&it.srcW&&it.srcH){linkRatio=it.srcW/it.srcH;updateHints();}
+  }catch(e){it.probed=true;it.error='Preview failed';paintRow(it);}
+}
+let linkRatio=null;
+
+/* ---------- queue rendering ---------- */
+const io=new IntersectionObserver(es=>{
+  for(const e of es){
+    if(!e.isIntersecting)continue;
+    const it=state.items.find(i=>i.id===+e.target.dataset.id);
+    if(it)queueProbe(it);
+  }
+},{rootMargin:'250px'});
+
+function badgeFor(it){
+  if(it.status==='done')return '<span class="badge done">done</span>';
+  if(it.status==='skipped')return '<span class="badge skip">as-is</span>';
+  if(it.status==='error')return '<span class="badge err">failed</span>';
+  if(it.status==='working')return '<span class="badge work">'+esc(it.stage||'working')+'</span>';
+  return '<span class="badge">queued</span>';
+}
+function predictSize(it){
+  if(!it.srcW)return '?';
+  try{const g=wkGeometry(it.srcW,it.srcH,it.override||readSettings());return g.outW+'×'+g.outH;}catch(e){return '?';}
+}
+function subFor(it){
+  const src=it.srcW?it.srcW+'×'+it.srcH:'…';
+  const out=it.outW?it.outW+'×'+it.outH:predictSize(it);
+  return src+' <span class="arrow">→</span> '+out+'  ·  '+fmtBytes(it.file.size)+
+    (it.outSize?' <span class="arrow">→</span> '+fmtBytes(it.outSize):'')+
+    (it.shrunk?' <span class="arrow">↓fit</span>':'')+
+    (it.overTarget?' <span style="color:var(--warn)">⚠ over limit</span>':'');
+}
+function rowHTML(it){
+  return '<input class="pick" type="checkbox" '+(it.sel?'checked':'')+'>'+
+    '<img class="th" alt="" '+(it.thumb?'src="'+it.thumb+'"':'')+'>'+
+    '<div class="info"><div class="nm" title="click to rename">'+esc(it.custom?'✎ '+it.custom:it.file.name)+'</div>'+
+    '<div class="sub">'+subFor(it)+'</div></div>'+
+    (it.override?'<span class="badge cust">custom</span>':'')+badgeFor(it)+
+    '<div class="acts">'+
+      (it.url?'<a class="iconbtn" download="'+esc(it.outName)+'" href="'+it.url+'" title="Download">⤓</a>':'')+
+      '<button class="iconbtn" data-act="pv" title="Preview">👁</button>'+
+      '<button class="iconbtn" data-act="rename" title="Rename">✎</button>'+
+      '<button class="iconbtn" data-act="del" title="Remove">✕</button></div>';
+}
+function render(){
+  const q=$('queue');
+  q.className=state.view==='grid'?'grid':'';
+  const frag=document.createDocumentFragment();
+  state.items.forEach((it,n)=>{
+    const row=document.createElement('div');
+    row.className='row'+(it.sel?' on':'');
+    row.dataset.id=it.id;
+    if(n<40)row.style.animationDelay=(n*12)+'ms';
+    row.innerHTML=rowHTML(it);
+    frag.appendChild(row);
+  });
+  q.innerHTML='';q.appendChild(frag);
+  q.querySelectorAll('.row').forEach(r=>io.observe(r));
+  $('emptyNote').hidden=state.items.length>0;
+  updateHints();
+}
+function paintRow(it){
+  const row=$('queue').querySelector('.row[data-id="'+it.id+'"]');
+  if(!row)return;
+  row.innerHTML=rowHTML(it);
+  row.classList.toggle('on',!!it.sel);
+}
+function repaintSubs(){
+  for(const it of state.items){
+    const el=$('queue').querySelector('.row[data-id="'+it.id+'"] .sub');
+    if(el)el.innerHTML=subFor(it);
+  }
+}
+function updateHints(){
+  const n=state.items.length;
+  const done=state.items.filter(i=>i.status==='done'||i.status==='skipped').length;
+  const bytes=state.items.reduce((a,i)=>a+i.file.size,0);
+  const sel=selected().length;
+  $('qCount').innerHTML='<b>'+n+'</b> image'+(n===1?'':'s')+(n?' · '+fmtBytes(bytes):'');
+  $('loadHint').textContent=n+' file'+(n===1?'':'s');
+  $('queueHint').textContent=done?done+' finished':'';
+  $('selBar').hidden=sel===0;
+  $('selCount').textContent=sel;
+  $('btnConvert').disabled=n===0||state.running;
+  $('btnPreview').disabled=n===0||state.running;
+  $('btnClear').disabled=n===0;
+  $('btnClearDone').disabled=done===0;
+  $('btnZipNow').disabled=!state.items.some(i=>i.blob);
+  const s=readSettings();
+  let desc='';
+  if(s.mode==='pixels')desc=s.pxW+'×'+s.pxH+' px';
+  if(s.mode==='percent')desc=s.pctW+'% × '+s.pctH+'%';
+  if(s.mode==='print'){
+    const f=s.unit==='inch'?1:(s.unit==='cm'?1/2.54:1/25.4);
+    const w=Math.round(s.printW*f*s.dpi),h=Math.round(s.printH*f*s.dpi);
+    desc=s.printW+'×'+s.printH+' '+s.unit+' @ '+s.dpi+' DPI';
+    $('printPxNote').innerHTML='That is <b>'+w.toLocaleString()+' × '+h.toLocaleString()+' pixels</b> ('+
+      (w*h/1e6).toFixed(1)+' MP)'+(w*h>80e6?' — very heavy, expect a few seconds per image.':'.');
+  }
+  if(s.mode==='oneside')desc=({long:'Long side',short:'Short side',w:'Width',h:'Height'})[s.sideMode]+' = '+s.sideValue+' px';
+  $('resizeHint').textContent=desc;
+  $('enhHint').textContent=['','light','medium','strong'][s.enhance]||'';
+  const fmt=s.outType==='keep'?'original format':(EXT_OF[s.outType]||'png').toUpperCase();
+  const wt=s.targetMode==='off'?'':' · '+(s.targetMode==='max'?'≤':'≈')+' '+fmtBytes(s.targetBytes);
+  $('abSummary').innerHTML=n
+    ?'<b>'+n+'</b> image'+(n===1?'':'s')+' · '+desc+' · '+fmt+wt+(done?' · <b>'+done+'</b> finished':'')
+    :'Load some images to begin.';
+  updateRenamePreview();
+}
+
+/* ---------- naming ---------- */
+function buildName(it,index,outW,outH,type){
+  const e0=EXT_OF[type]||'png';
+  const ext=$('chkUpperExt').checked?e0.toUpperCase():e0;
+  if(it.custom)return it.custom.replace(/\.[^.]+$/,'')+'.'+ext;
+  if(!$('chkRename').checked)return it.base+'.'+ext;
+  const start=+$('renameStart').value||0,n=start+index,d=new Date(),pad=x=>String(x).padStart(2,'0');
+  let name=$('renamePattern').value||'{name}';
+  name=name.replace(/#+/g,m=>String(n).padStart(m.length,'0'))
+    .replace(/\{name\}/gi,it.base).replace(/\{n\}/gi,n)
+    .replace(/\{w\}/gi,outW||'').replace(/\{h\}/gi,outH||'')
+    .replace(/\{sw\}/gi,it.srcW||'').replace(/\{sh\}/gi,it.srcH||'')
+    .replace(/\{date\}/gi,d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()))
+    .replace(/\{time\}/gi,pad(d.getHours())+pad(d.getMinutes()));
+  name=name.replace(/[\\/:*?"<>|]/g,'_').trim()||it.base;
+  return name+'.'+ext;
+}
+function updateRenamePreview(){
+  if(!$('chkRename').checked){$('renamePreview').textContent='';return;}
+  const it=state.items[0],s=readSettings();
+  const type=s.outType==='keep'?(it?it.file.type:'image/jpeg'):s.outType;
+  const sample=it?buildName(it,0,it.outW||3000,it.outH||2000,type)
+    :buildName({base:'DSC_0001',custom:null,srcW:4000,srcH:3000},0,3000,2000,type);
+  $('renamePreview').textContent='First file → '+sample;
+}
+
+/* ---------- destination ---------- */
+const HAS_FSA=typeof window.showDirectoryPicker==='function';
+if(!HAS_FSA){
+  $('fsaNote').innerHTML='<span style="color:var(--warn)">Your browser cannot write into a folder.</span> Use Chrome, Edge or Opera on desktop for that — otherwise switch to ZIP.';
+  $('btnPickFolder').disabled=true;
+}
+$('btnPickFolder').addEventListener('click',async()=>{
+  try{
+    const dir=await window.showDirectoryPicker({mode:'readwrite',startIn:'pictures'});
+    if(await dir.requestPermission({mode:'readwrite'})!=='granted'){toast('Write permission was not granted.','err');return;}
+    state.dir=dir;$('folderLabel').textContent='📁 '+dir.name;
+    toast('Results will land in "'+esc(dir.name)+'".','ok','Folder ready');
+  }catch(e){}
+});
+document.querySelectorAll('input[name=dest]').forEach(r=>r.addEventListener('change',()=>{
+  const folder=document.querySelector('input[name=dest]:checked').value==='folder';
+  $('folderBox').hidden=!folder;$('zipBox').hidden=folder;
+}));
+
+function askOverwrite(name){
+  return new Promise(res=>{
+    $('owName').textContent=name;$('owBack').classList.add('open');
+    const h=e=>{const b=e.target.closest('[data-ow]');if(!b)return;
+      $('owBack').classList.remove('open');$('owBack').removeEventListener('click',h);res(b.dataset.ow);};
+    $('owBack').addEventListener('click',h);
+  });
+}
+async function writeToFolder(name,blob){
+  const dir=state.dir;let target=name;
+  if($('chkAskOverwrite').checked&&!state.owAll){
+    let exists=true;
+    try{await dir.getFileHandle(target);}catch(e){exists=false;}
+    if(exists){
+      if(state.owSkipAll)return {skipped:true};
+      const a=await askOverwrite(target);
+      if(a==='skip')return {skipped:true};
+      if(a==='skipall'){state.owSkipAll=true;return {skipped:true};}
+      if(a==='all')state.owAll=true;
+      if(a==='rename'){
+        const [b,e]=splitName(target);
+        for(let i=2;i<1000;i++){
+          const cand=b+' ('+i+').'+e;let taken=true;
+          try{await dir.getFileHandle(cand);}catch(err){taken=false;}
+          if(!taken){target=cand;break;}
+        }
+      }
+    }
+  }
+  const fh=await dir.getFileHandle(target,{create:true});
+  const w=await fh.createWritable();await w.write(blob);await w.close();
+  return {name:target};
+}
+function showError(name,msg){
+  return new Promise(res=>{
+    if(!$('chkShowErrors').checked||state.muteErrors){res();return;}
+    $('errName').textContent=name;$('errMsg').textContent=msg;$('errBack').classList.add('open');
+    const done=m=>{if(m)state.muteErrors=true;$('errBack').classList.remove('open');res();};
+    $('errOk').onclick=()=>done(false);$('errMute').onclick=()=>done(true);
   });
 }
 
-processBtn.addEventListener('click', processAll);
+/* ---------- "nothing would change" guard ---------- */
+function noopReasons(list){
+  const probed=list.filter(i=>i.srcW);
+  const why=[];
+  if(!state.dirty)why.push('You have not changed any setting yet — this is the page exactly as it loaded.');
+  if(probed.length){
+    let changes=false;
+    for(const it of probed){
+      const s=settingsFor(it),g=wkGeometry(it.srcW,it.srcH,s);
+      if(g.outW!==it.srcW||g.outH!==it.srcH)changes=true;
+      else if(s.outType!==it.file.type)changes=true;
+      else if(s.enhance>0||s.sharpen>0||s.crop||s.fill)changes=true;
+      else if(s.targetMode!=='off')changes=true;
+      if(changes)break;
+    }
+    if(!changes)why.push('Every image already matches the requested size and format, so each one would come back byte-for-byte the same picture.');
+  }
+  if($('chkRename').checked||list.some(i=>i.custom))return null;   // renaming is a real change
+  if(!why.length)return null;
+  return why;
+}
+function askNoop(why){
+  return new Promise(res=>{
+    $('noopWhy').innerHTML='<ul><li>'+why.map(esc).join('</li><li>')+'</li></ul>';
+    $('noopBack').classList.add('open');
+    const close=v=>{$('noopBack').classList.remove('open');res(v);};
+    $('noopOk').onclick=()=>close(false);
+    $('noopAnyway').onclick=()=>close(true);
+  });
+}
 
-clearBtn.addEventListener('click', () => {
-  items.forEach(it => { if (it.resultUrl) URL.revokeObjectURL(it.resultUrl); });
-  items = [];
-  ratioLockSrc = null;
+/* ---------- confetti ---------- */
+function confetti(n){
+  if(document.documentElement.dataset.fun==='off')return;
+  if(window.matchMedia('(prefers-reduced-motion:reduce)').matches)return;
+  const cv=$('confetti'),ctx=cv.getContext('2d');
+  cv.width=innerWidth;cv.height=innerHeight;cv.style.display='block';
+  const cols=['#ff5a2e','#ff8a5c','#7fc97f','#e8b84b','#4ea8ff','#f3ece4'];
+  const P=[];
+  for(let i=0;i<(n||120);i++)P.push({
+    x:innerWidth*(.2+Math.random()*.6),y:innerHeight+20,
+    vx:(Math.random()-.5)*9,vy:-(11+Math.random()*13),
+    s:5+Math.random()*7,r:Math.random()*6.28,vr:(Math.random()-.5)*.35,
+    c:cols[(Math.random()*cols.length)|0],life:0
+  });
+  let raf;const t0=performance.now();
+  (function frame(t){
+    const el=t-t0;ctx.clearRect(0,0,cv.width,cv.height);
+    let alive=false;
+    for(const p of P){
+      p.vy+=.42;p.x+=p.vx;p.y+=p.vy;p.r+=p.vr;
+      if(p.y<cv.height+40)alive=true;
+      ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.r);
+      ctx.globalAlpha=Math.max(0,1-el/2600);
+      ctx.fillStyle=p.c;ctx.fillRect(-p.s/2,-p.s/2,p.s,p.s*.62);ctx.restore();
+    }
+    if(alive&&el<2600)raf=requestAnimationFrame(frame);
+    else{cancelAnimationFrame(raf);cv.style.display='none';ctx.clearRect(0,0,cv.width,cv.height);}
+  })(t0);
+}
+
+/* ---------- progress window ---------- */
+const pm={rows:new Map(),t0:0,done:0,fail:0,oldBytes:0,newBytes:0,total:0,timer:null};
+function openProgress(list){
+  const tb=$('pmRows');tb.innerHTML='';pm.rows.clear();
+  const frag=document.createDocumentFragment();
+  list.forEach((it,i)=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML='<td class="mono">'+(i+1)+'</td>'+
+      '<td class="path" title="'+esc(it.file.name)+'">'+esc(it.file.name)+'</td>'+
+      '<td class="path mono" data-out>—</td>'+
+      '<td class="mono">'+fmtBytes(it.file.size)+'</td>'+
+      '<td class="mono" data-new>—</td><td class="mono" data-ratio>—</td><td class="mono" data-st>waiting</td>';
+    frag.appendChild(tr);pm.rows.set(it.id,tr);
+  });
+  tb.appendChild(frag);
+  pm.t0=performance.now();pm.done=0;pm.fail=0;pm.oldBytes=0;pm.newBytes=0;pm.total=list.length;
+  $('pmTitle').textContent='Converting…';
+  $('pmSub').textContent='Processing list: '+pm.total+' file'+(pm.total===1?'':'s');
+  $('pmDone').hidden=true;$('pmZip').hidden=true;$('pmClose').hidden=true;$('pmPreview').hidden=true;
+  $('pmCancel').hidden=false;$('pmCancel').textContent='■ Stop';
+  $('progressBack').classList.add('open');
+  clearInterval(pm.timer);pm.timer=setInterval(tickStats,250);tickStats();
+}
+function pmSet(it,p){
+  const tr=pm.rows.get(it.id);if(!tr)return;
+  if(p.status!==undefined)tr.querySelector('[data-st]').textContent=p.status;
+  if(p.out!==undefined){const c=tr.querySelector('[data-out]');c.textContent=p.out;c.title=p.out;}
+  if(p.newSize!==undefined)tr.querySelector('[data-new]').textContent=fmtBytes(p.newSize);
+  if(p.ratio!==undefined)tr.querySelector('[data-ratio]').textContent=p.ratio;
+  tr.classList.toggle('is-err',it.status==='error');
+  tr.classList.toggle('is-run',it.status==='working');
+  if(p.ok)tr.classList.add('is-ok');
+}
+function tickStats(){
+  const fin=pm.done+pm.fail,pct=pm.total?fin/pm.total:0;
+  $('pmBar').style.width=(pct*100).toFixed(1)+'%';
+  $('stProgress').textContent=fin+' / '+pm.total;
+  $('stOld').textContent=fmtBytes(pm.oldBytes);
+  $('stNew').textContent=fmtBytes(pm.newBytes);
+  $('stRatio').textContent=pm.oldBytes?(pm.newBytes/pm.oldBytes*100).toFixed(0)+' %':'—';
+  const saved=pm.oldBytes-pm.newBytes,sv=$('stSaved');
+  sv.textContent=(saved>=0?'':'+')+fmtBytes(Math.abs(saved));
+  sv.className=saved>=0?'good':'bad';
+  const el=performance.now()-pm.t0;
+  $('stElapsed').textContent=fmtClock(el);
+  $('stEta').textContent=fin>0&&fin<pm.total?fmtClock(el/fin*(pm.total-fin)):(fin?'00:00:00':'—');
+  const f=$('stFail');f.textContent=pm.fail;f.className=pm.fail?'bad':'good';
+}
+
+/* ---------- the run ---------- */
+async function convert(list){
+  if(state.running)return;
+  list=(list&&list.length)?list:state.items;
+  if(!list.length)return;
+  const toFolder=document.querySelector('input[name=dest]:checked').value==='folder';
+  if(toFolder&&!state.dir){
+    toast('Pick an output folder first (step 05) — or switch to ZIP.','err','No destination');
+    $('secDest').scrollIntoView({behavior:'smooth',block:'center'});return;
+  }
+  const gs=readSettings();
+  if(gs.crop&&gs.fill){toast('Smart-Cropping and Smart-Filling cannot both be on.','err');return;}
+  if(!state.noopOK){
+    const why=noopReasons(list);
+    if(why){
+      const anyway=await askNoop(why);
+      if(!anyway)return;
+      state.noopOK=true;
+    }
+  }
+
+  state.running=true;state.cancel=false;
+  state.owAll=false;state.owSkipAll=false;state.muteErrors=false;
+  $('btnConvert').disabled=true;
+  list.forEach(it=>{
+    if(it.url){URL.revokeObjectURL(it.url);it.url=null;}
+    it.blob=null;it.status='queued';it.stage='';it.error=null;
+    it.outW=0;it.outH=0;it.outSize=0;it.shrunk=false;it.overTarget=false;
+  });
+  openProgress(list);
+
+  let conc=+$('workersSel').value;
+  if(!conc){
+    const cores=navigator.hardwareConcurrency||4;
+    conc=Math.max(1,Math.min(6,cores-1));
+    const probe=list.find(i=>i.srcW)||{srcW:3000,srcH:2000};
+    const g=wkGeometry(probe.srcW,probe.srcH,gs);
+    const mp=g.outW*g.outH/1e6;
+    if(mp>60)conc=1;else if(mp>25)conc=2;else if(mp>12)conc=Math.min(conc,3);
+    if(gs.targetMode!=='off')conc=Math.max(1,conc-1);
+  }
+  conc=Math.min(conc,list.length);
+  let cursor=0;
+  const workers=[];
+
+  const runOne=(item,index,worker)=>new Promise(resolve=>{
+    item.status='working';item.stage='decode';
+    pmSet(item,{status:'decoding…'});paintRow(item);
+    const s=settingsFor(item);
+
+    const finish=async msg=>{
+      if(msg.type==='error'){
+        item.status='error';item.error=msg.message;pm.fail++;
+        pmSet(item,{status:'FAILED'});paintRow(item);
+        await showError(item.file.name,msg.message);resolve();return;
+      }
+      let blob=msg.blob;
+      if(s.stampDpi)blob=await stampDpi(blob,s.dpi);
+      item.outW=msg.outW;item.outH=msg.outH;item.srcW=msg.srcW;item.srcH=msg.srcH;
+      item.outSize=blob.size;item.shrunk=!!msg.shrunk;item.overTarget=!!msg.over;
+      item.outName=buildName(item,index,msg.outW,msg.outH,msg.actualType||s.outType);
+      if(toFolder){
+        try{
+          pmSet(item,{status:'writing…'});
+          const res=await writeToFolder(item.outName,blob);
+          if(res.skipped){
+            item.status='skipped';item.stage='';pm.done++;
+            pmSet(item,{status:'skipped',out:'(exists)'});paintRow(item);resolve();return;
+          }
+          item.outName=res.name;
+        }catch(err){
+          item.status='error';item.error='Could not write to the folder: '+err.message;pm.fail++;
+          pmSet(item,{status:'WRITE FAILED'});paintRow(item);
+          await showError(item.file.name,item.error);resolve();return;
+        }
+      } else {item.blob=blob;item.url=URL.createObjectURL(blob);}
+      item.status=msg.skipped?'skipped':'done';item.stage='';
+      pm.done++;pm.oldBytes+=item.file.size;pm.newBytes+=item.outSize;
+      pmSet(item,{status:item.overTarget?'⚠ over limit':(msg.skipped?'as-is ✓':'done ✓'),
+        out:item.outName,newSize:item.outSize,
+        ratio:(item.outSize/item.file.size*100).toFixed(0)+' %',ok:!item.overTarget});
+      const row=$('queue').querySelector('.row[data-id="'+item.id+'"]');
+      paintRow(item);
+      if(row){const r2=$('queue').querySelector('.row[data-id="'+item.id+'"]');
+        if(r2){r2.classList.add('just-done');setTimeout(()=>r2.classList.remove('just-done'),950);}}
+      resolve();
+    };
+
+    if(worker){
+      worker.onmessage=ev=>{
+        const m=ev.data;
+        if(m.type==='stage'){item.stage=m.stage;pmSet(item,{status:m.stage+'…'});
+          const b=$('queue').querySelector('.row[data-id="'+item.id+'"] .badge.work');
+          if(b)b.textContent=m.stage;return;}
+        finish(m);
+      };
+      worker.onerror=e=>finish({type:'error',message:e.message||'Worker crashed'});
+      worker.postMessage({id:item.id,file:item.file,settings:s});
+    } else renderOnMain(item,s).then(finish);
+  });
+
+  const pump=async w=>{
+    while(!state.cancel){
+      const i=cursor++;
+      if(i>=list.length)break;
+      await runOne(list[i],i,w);
+    }
+  };
+  for(let i=0;i<conc;i++)workers.push(HAS_WORKERS?makeWorker():null);
+  await Promise.all(workers.map(w=>pump(w)));
+  workers.forEach(w=>w&&w.terminate());
+
+  state.running=false;
+  clearInterval(pm.timer);tickStats();
+  $('pmCancel').hidden=true;$('pmDone').hidden=false;$('pmClose').hidden=false;$('pmPreview').hidden=false;
+  $('pmTitle').textContent=state.cancel?'Stopped':'Finished 🎉';
+  const secs=(performance.now()-pm.t0)/1000;
+  $('pmSub').textContent=pm.done+' converted, '+pm.fail+' failed — in '+(secs<60?secs.toFixed(1)+' s':fmtClock(secs*1000));
+  if(!toFolder&&state.items.some(i=>i.blob))$('pmZip').hidden=false;
+  updateHints();
+  const over=list.filter(i=>i.overTarget).length;
+  if(over)toast(over+' file'+(over===1?'':'s')+' could not be squeezed under your size limit by quality alone. '+
+    'Switch on <b>Shrink dimensions if quality alone cannot reach it</b> to force it.','err','Over the limit');
+  if(!state.cancel&&pm.done){
+    confetti(Math.min(220,60+pm.done*3));
+    toast(pm.done+' image'+(pm.done===1?'':'s')+' finished'+
+      (toFolder?' and saved into "'+esc(state.dir.name)+'".':'. Download them below.'),'ok','All done 🎉');
+  }
+}
+
+/* main-thread fallback */
+async function renderOnMain(item,s){
+  try{
+    let bmp,objUrl=null;
+    try{bmp=await createImageBitmap(item.file);}
+    catch(e){
+      objUrl=URL.createObjectURL(item.file);
+      const img=new Image();
+      await new Promise((res,rej)=>{img.onload=res;
+        img.onerror=()=>rej(new Error('This file could not be decoded by the browser ('+(item.file.type||'unknown format')+')'));
+        img.src=objUrl;});
+      bmp=img;
+    }
+    const OC=function(w,h){const c=document.createElement('canvas');c.width=w;c.height=h;return c;};
+    const r=wkRender(bmp,s,OC);
+    const e=await wkEncode(r.canvas,s,OC);
+    if(bmp.close)bmp.close();
+    if(objUrl)URL.revokeObjectURL(objUrl);
+    if(!e.blob)throw new Error('Encoding failed');
+    return {type:'done',blob:e.blob,outW:e.w,outH:e.h,srcW:r.sw,srcH:r.sh,
+            skipped:r.g.skip,shrunk:!!e.shrunk,over:!!e.over,actualType:e.blob.type};
+  }catch(err){return {type:'error',message:err.message||String(err)};}
+}
+
+/* ---------- ZIP ---------- */
+async function downloadZip(){
+  const ready=state.items.filter(i=>i.blob);
+  if(!ready.length){toast('Nothing to zip yet.','err');return;}
+  const limitMB=+$('zipSplit').value,limit=limitMB?limitMB*1048576:Infinity;
+  const keepDate=$('chkKeepDate').checked;
+  const groups=[[]];let acc=0;
+  for(const it of ready){
+    if(acc+it.outSize>limit&&groups[groups.length-1].length){groups.push([]);acc=0;}
+    groups[groups.length-1].push(it);acc+=it.outSize;
+  }
+  toast('Packing '+ready.length+' file'+(ready.length===1?'':'s')+
+    (groups.length>1?' into '+groups.length+' archives':'')+'…');
+  for(let gi=0;gi<groups.length;gi++){
+    const zip=new JSZip(),used=new Set();
+    for(const it of groups[gi]){
+      let n=it.outName||it.file.name;
+      if(used.has(n)){const [b,e]=splitName(n);let k=2;while(used.has(b+' ('+k+').'+e))k++;n=b+' ('+k+').'+e;}
+      used.add(n);
+      zip.file(n,it.blob,keepDate?{date:new Date(it.file.lastModified),compression:'STORE'}:{compression:'STORE'});
+    }
+    const blob=await zip.generateAsync({type:'blob',compression:'STORE'});
+    const url=URL.createObjectURL(blob),a=document.createElement('a');
+    a.href=url;a.download=groups.length>1?'enlarger_part'+(gi+1)+'.zip':'enlarger_export.zip';
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),30000);
+  }
+}
+
+/* ================= PREVIEW ================= */
+const pv={list:[],idx:0,busy:false,rect:null,urls:[]};
+const PV_FULL_MAX=24e6;
+
+function pvRelease(){pv.urls.forEach(u=>URL.revokeObjectURL(u));pv.urls=[];}
+
+async function openPreview(list,idx){
+  if(!list||!list.length){toast('Load an image first.','err');return;}
+  pv.list=list;pv.idx=Math.max(0,Math.min(idx||0,list.length-1));
+  $('pvBack').classList.add('open');
+  await drawPreview();
+}
+async function drawPreview(){
+  if(pv.busy)return;
+  pv.busy=true;
+  const it=pv.list[pv.idx];
+  $('pvSpin').style.display='';$('cmpBox').hidden=true;
+  $('pvName').textContent=it.file.name;
+  $('pvPos').textContent=(pv.idx+1)+' / '+pv.list.length;
+  $('pvInfo').textContent='Rendering…';
+  pvRelease();
+  try{
+    let bmp,objUrl=null;
+    try{bmp=await createImageBitmap(it.file);}
+    catch(e){
+      objUrl=URL.createObjectURL(it.file);const img=new Image();
+      await new Promise((res,rej)=>{img.onload=res;img.onerror=()=>rej(new Error('cannot decode'));img.src=objUrl;});
+      bmp=img;
+    }
+    const sw=bmp.width,sh=bmp.height;
+    it.srcW=sw;it.srcH=sh;
+    const s=settingsFor(it);
+    const g=wkGeometry(sw,sh,s);
+    const full=g.outW*g.outH<=PV_FULL_MAX;
+    const OC=function(w,h){const c=document.createElement('canvas');c.width=w;c.height=h;return c;};
+
+    let rect,fg;
+    if(full){
+      rect={x:0,y:0,w:g.outW,h:g.outH};fg=g;
+    } else {
+      const rw=Math.min(1600,g.outW),rh=Math.min(1100,g.outH);
+      rect={x:Math.round((g.outW-rw)/2),y:Math.round((g.outH-rh)/2),w:rw,h:rh};
+      const kx=g.sW/g.dW,ky=g.sH/g.dH;
+      let fsx=g.sx+(rect.x-g.dx)*kx, fsy=g.sy+(rect.y-g.dy)*ky;
+      let fsw=rect.w*kx, fsh=rect.h*ky;
+      fsx=Math.max(0,Math.min(sw-1,fsx));fsy=Math.max(0,Math.min(sh-1,fsy));
+      fsw=Math.max(1,Math.min(sw-fsx,fsw));fsh=Math.max(1,Math.min(sh-fsy,fsh));
+      fg={skip:g.skip,outW:rect.w,outH:rect.h,sx:fsx,sy:fsy,sW:fsw,sH:fsh,dx:0,dy:0,dW:rect.w,dH:rect.h};
+    }
+    pv.rect=rect;
+
+    /* AFTER — the real pipeline */
+    const after=wkRender(bmp,Object.assign({},s,{forceGeom:fg}),OC);
+    /* BEFORE — the same region simply scaled, no processing */
+    const before=OC(rect.w,rect.h);
+    const bctx=before.getContext('2d');
+    bctx.imageSmoothingEnabled=true;bctx.imageSmoothingQuality='high';
+    if(s.fill&&s.bg){bctx.fillStyle=s.bg;bctx.fillRect(0,0,rect.w,rect.h);}
+    bctx.drawImage(bmp,fg.sx,fg.sy,fg.sW,fg.sH,fg.dx,fg.dy,fg.dW,fg.dH);
+
+    const [ab,bb]=await Promise.all([
+      new Promise(r=>after.canvas.toBlob(r,'image/png')),
+      new Promise(r=>before.toBlob(r,'image/png'))
+    ]);
+    const au=URL.createObjectURL(ab),bu=URL.createObjectURL(bb);
+    pv.urls.push(au,bu);
+    $('cmpBefore').src=bu;$('cmpAfterImg').src=au;
+
+    /* true output weight, only when we rendered the whole thing */
+    let weight='';
+    if(full){
+      const enc=await wkEncode(after.canvas,s,OC);
+      weight=' · output ≈ <b>'+fmtBytes(enc.blob.size)+'</b>'+
+        (enc.shrunk?' (shrunk to '+enc.w+'×'+enc.h+' to hit the limit)':'')+
+        (s.targetMode!=='off'?' — limit '+fmtBytes(s.targetBytes)+(enc.blob.size<=s.targetBytes?' ✓':' ✗'):'');
+    }
+    if(bmp.close)bmp.close();
+    if(objUrl)URL.revokeObjectURL(objUrl);
+
+    $('pvInfo').innerHTML='Original <b>'+sw+'×'+sh+'</b> ('+fmtBytes(it.file.size)+')'+
+      ' → output <b>'+g.outW+'×'+g.outH+'</b>'+weight+
+      (full?'':' · showing a <b>100% centre crop</b> ('+rect.w+'×'+rect.h+') because the full render is '+
+        (g.outW*g.outH/1e6).toFixed(0)+' MP')+
+      (it.override?' · <span style="color:var(--sel)">using this image\'s own settings</span>':'');
+    applyZoom();
+    $('pvSpin').style.display='none';$('cmpBox').hidden=false;
+    setDivide(0.5);
+  }catch(err){
+    $('pvSpin').style.display='none';
+    $('pvInfo').innerHTML='<span style="color:var(--err)">Could not render: '+esc(err.message)+'</span>';
+  }
+  pv.busy=false;
+}
+function applyZoom(){
+  const z=$('pvZoom').value,r=pv.rect;if(!r)return;
+  const box=$('cmpBox');
+  let w;
+  if(z==='fit'){
+    const avail=$('cmpWrap').clientWidth-30;
+    w=Math.min(r.w,Math.max(180,avail));
+  } else w=r.w*parseFloat(z);
+  const h=Math.round(w*r.h/r.w);
+  box.style.width=w+'px';box.style.height=h+'px';
+  [$('cmpBefore'),$('cmpAfterImg')].forEach(im=>{im.style.width=w+'px';im.style.height=h+'px';});
+  $('cmpAfter').style.width=(w*curDivide)+'px';
+  $('cmpHandle').style.left=(w*curDivide)+'px';
+}
+let curDivide=0.5;
+function setDivide(f){
+  curDivide=Math.max(0,Math.min(1,f));
+  const w=$('cmpBox').clientWidth;
+  $('cmpAfter').style.width=(w*curDivide)+'px';
+  $('cmpHandle').style.left=(w*curDivide)+'px';
+}
+(function(){
+  let drag=false;
+  const move=e=>{
+    if(!drag)return;
+    const r=$('cmpBox').getBoundingClientRect();
+    const x=(e.touches?e.touches[0].clientX:e.clientX)-r.left;
+    setDivide(x/r.width);
+  };
+  $('cmpHandle').addEventListener('mousedown',e=>{drag=true;e.preventDefault();});
+  $('cmpBox').addEventListener('mousedown',e=>{if(e.target.id==='cmpHandle')return;drag=true;move(e);});
+  window.addEventListener('mousemove',move);
+  window.addEventListener('mouseup',()=>drag=false);
+  $('cmpHandle').addEventListener('touchstart',e=>{drag=true;},{passive:true});
+  window.addEventListener('touchmove',move,{passive:true});
+  window.addEventListener('touchend',()=>drag=false);
+})();
+$('pvZoom').addEventListener('change',applyZoom);
+$('pvRedraw').addEventListener('click',drawPreview);
+$('pvPrev').addEventListener('click',()=>{if(pv.idx>0){pv.idx--;drawPreview();}});
+$('pvNext').addEventListener('click',()=>{if(pv.idx<pv.list.length-1){pv.idx++;drawPreview();}});
+$('pvClose').addEventListener('click',()=>{$('pvBack').classList.remove('open');pvRelease();});
+$('pmPreview').addEventListener('click',()=>{$('progressBack').classList.remove('open');openPreview(state.items,0);});
+$('btnPreview').addEventListener('click',()=>openPreview(state.items,0));
+$('btnPreviewSel').addEventListener('click',()=>openPreview(selected(),0));
+
+/* ================= TOOLTIP PORTAL ================= */
+const tipEl=$('tip');let tipOwner=null;
+function showTip(el){
+  const t=el.dataset.tip;if(!t)return;
+  tipEl.textContent=t;tipEl.classList.add('on');
+  const r=el.getBoundingClientRect(),tw=tipEl.offsetWidth,th=tipEl.offsetHeight;
+  let left=r.left+r.width/2-tw/2;
+  left=Math.max(10,Math.min(left,innerWidth-tw-10));
+  let top=r.top-th-10;
+  if(top<10)top=r.bottom+10;
+  tipEl.style.left=left+'px';tipEl.style.top=top+'px';
+  if(tipOwner)tipOwner.classList.remove('on');
+  el.classList.add('on');tipOwner=el;
+}
+function hideTip(){tipEl.classList.remove('on');if(tipOwner)tipOwner.classList.remove('on');tipOwner=null;}
+document.addEventListener('mouseover',e=>{
+  const i=e.target.closest('.i');
+  if(i){if(i!==tipOwner)showTip(i);}
+  else if(tipOwner&&!e.target.closest('#tip'))hideTip();
+});
+/* capture phase: the icon must never toggle the checkbox it sits next to */
+document.addEventListener('click',e=>{
+  const i=e.target.closest('.i');
+  if(i){e.preventDefault();e.stopPropagation();
+    if(tipOwner===i)hideTip();else showTip(i);return;}
+  hideTip();
+},true);
+window.addEventListener('scroll',()=>{if(tipOwner)hideTip();},true);
+document.addEventListener('keydown',e=>{if(e.key==='Escape')hideTip();});
+
+/* ================= TOUR ================= */
+const TOUR=[
+  {el:'secLoad',title:'1 · Load your photos',
+   text:'Drag a whole folder onto the box, or use the buttons. JPG, PNG, WebP, AVIF, GIF, BMP, SVG and ICO all work — 500 comfortably, 2000 at most. Nothing is uploaded anywhere.'},
+  {el:'modeSeg',title:'2 · Pick how you measure',
+   text:'Pixels for exact dimensions, Percentage to scale everything by the same factor, Print Size to work in inches or centimetres at a chosen DPI, or Based on one side to fix just the long or short edge.'},
+  {el:'filterSel',title:'3 · Choose the quality',
+   text:'Bicubic is the safe default, Lanczos3 the sharpest for enlargements, Canvas Smooth the fastest. Every option on this page has a small ⓘ — hover or tap it for a plain-English explanation.'},
+  {el:'chkSwitchLong',title:'4 · Fine-tune the fit',
+   text:'Preserve Aspect Ratio never distorts. Smart-Cropping trims to an exact size, Smart-Filling pads instead. Only this Resize step is required — everything below it is optional.'},
+  {el:'secEnhance',title:'5 · Rescue pixelated photos',
+   text:'Enhance cleans JPEG blocking and pixel noise BEFORE enlarging, then sharpens only real edges. Medium suits most pixelated sources. It is classical processing, not AI — it will not invent detail, but blurry uploads come out far cleaner.'},
+  {el:'targetMode',title:'6 · Control the file weight',
+   text:'Need every photo under 2 MB for a website or an upload form? Set the limit here and Enlarger hunts for the best quality that still fits — automatically, per image, in KB or MB.'},
+  {el:'secOutput',title:'7 · Format and file names',
+   text:'Pick the output format, then optionally bulk-rename with a pattern like {name}_{w}x{h} or ###_poster. You can also click any filename in the queue to rename just that one.'},
+  {el:'secDest',title:'8 · Where should they go?',
+   text:'Browse to a folder and each finished image is written straight to your disk — the reliable route for hundreds of large files. No folder access in your browser? Switch to ZIP.'},
+  {el:'secQueue',title:'9 · Select what you want',
+   text:'Tick individual images to work on a subset. With a selection active you can apply the current settings to just those photos, preview them, or convert only them — so one batch can get two different treatments.'},
+  {el:'btnPreview',title:'10 · Look before you leap',
+   text:'Preview renders one image with your exact settings and shows a drag-to-compare slider against the original, plus the real output file size. Check it before committing to 500 photos.'},
+  {el:'btnConvert',title:'11 · Convert',
+   text:'Enlarger spreads the batch across your CPU cores. If you have not changed a single setting it stops and says so first, rather than burning your time on a no-op. Then the progress window tracks every file, size, ratio and the time remaining.'}
+];
+let tourIdx=-1,tourCur=null;
+function placeTour(){
+  if(!tourCur)return;
+  const el=$(tourCur.el);if(!el)return;
+  const r=el.getBoundingClientRect(),pad=8,hole=$('tourHole');
+  hole.style.left=(r.left-pad)+'px';hole.style.top=(r.top-pad)+'px';
+  hole.style.width=(r.width+pad*2)+'px';hole.style.height=(r.height+pad*2)+'px';
+  const pop=$('tourPop'),pw=Math.min(346,innerWidth-28),ph=pop.offsetHeight||200;
+  let left=r.left,top=r.bottom+16;
+  if(top+ph>innerHeight-10)top=r.top-ph-16;
+  if(top<10)top=Math.max(10,Math.min(innerHeight-ph-10,r.top));
+  if(left+pw>innerWidth-14)left=innerWidth-pw-14;
+  pop.style.left=Math.max(14,left)+'px';pop.style.top=top+'px';
+}
+function tourGo(i){
+  if(i<0||i>=TOUR.length)return tourEnd();
+  const st=TOUR[i],el=$(st.el);
+  if(!el)return tourGo(i>tourIdx?i+1:i-1);
+  tourIdx=i;tourCur=st;
+  $('tStep').textContent='Step '+(i+1)+' of '+TOUR.length;
+  $('tTitle').textContent=st.title;
+  $('tText').textContent=st.text;
+  $('tDots').innerHTML=TOUR.map((_,k)=>'<i class="'+(k===i?'on':'')+'"></i>').join('');
+  $('tPrev').disabled=i===0;
+  $('tNext').textContent=i===TOUR.length-1?'Finish ✓':'Next →';
+  el.scrollIntoView({block:'center',inline:'nearest'});
+  placeTour();                                   /* immediate, in case rAF is throttled */
+  requestAnimationFrame(()=>requestAnimationFrame(placeTour));   /* again once scrolling settles */
+}
+function tourEnd(){
+  $('tourMask').classList.remove('on');tourIdx=-1;tourCur=null;
+  try{localStorage.setItem('enlarger-tour','1');}catch(e){}
+}
+$('btnTour').addEventListener('click',()=>{$('tourMask').classList.add('on');tourGo(0);});
+$('tNext').addEventListener('click',()=>tourGo(tourIdx+1));
+$('tPrev').addEventListener('click',()=>tourGo(tourIdx-1));
+$('tSkip').addEventListener('click',tourEnd);
+$('tourMask').addEventListener('click',e=>{if(e.target.id==='tourMask')tourEnd();});
+addEventListener('scroll',()=>{if(tourIdx>=0)placeTour();},true);
+addEventListener('resize',()=>{if(tourIdx>=0)placeTour();});
+document.addEventListener('keydown',e=>{
+  if(tourIdx<0)return;
+  if(e.key==='Escape')tourEnd();
+  if(e.key==='ArrowRight'){e.preventDefault();tourGo(tourIdx+1);}
+  if(e.key==='ArrowLeft'){e.preventDefault();tourGo(tourIdx-1);}
+});
+
+/* ================= WIRING ================= */
+const drop=$('drop');
+drop.addEventListener('click',()=>$('fileInput').click());
+$('btnAddFiles').addEventListener('click',()=>$('fileInput').click());
+$('btnAddFolder').addEventListener('click',()=>$('folderInput').click());
+$('fileInput').addEventListener('change',e=>{addFiles(e.target.files);e.target.value='';});
+$('folderInput').addEventListener('change',e=>{addFiles(e.target.files);e.target.value='';});
+['dragenter','dragover'].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.add('drag');}));
+['dragleave','drop'].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.remove('drag');}));
+addEventListener('dragover',e=>e.preventDefault());
+addEventListener('drop',e=>e.preventDefault());
+drop.addEventListener('drop',async e=>{
+  const dt=e.dataTransfer;
+  const entries=dt.items?Array.from(dt.items).map(i=>i.webkitGetAsEntry&&i.webkitGetAsEntry()).filter(Boolean):[];
+  if(entries.some(en=>en.isDirectory)){
+    const files=[];
+    const walk=en=>new Promise(res=>{
+      if(en.isFile)en.file(f=>{files.push(f);res();},res);
+      else if(en.isDirectory){
+        const rd=en.createReader();
+        const readAll=()=>rd.readEntries(async b=>{
+          if(!b.length)return res();
+          await Promise.all(b.map(walk));readAll();
+        },res);
+        readAll();
+      } else res();
+    });
+    await Promise.all(entries.map(walk));
+    addFiles(files);
+  } else addFiles(dt.files);
+});
+
+$('queue').addEventListener('change',e=>{
+  if(!e.target.classList.contains('pick'))return;
+  const row=e.target.closest('.row');
+  const it=state.items.find(i=>i.id===+row.dataset.id);
+  if(it){it.sel=e.target.checked;row.classList.toggle('on',it.sel);updateHints();}
+});
+$('queue').addEventListener('click',e=>{
+  const row=e.target.closest('.row');if(!row)return;
+  const it=state.items.find(i=>i.id===+row.dataset.id);if(!it)return;
+  const act=e.target.closest('[data-act]');
+  if(act){
+    const a=act.dataset.act;
+    if(a==='del'){if(it.url)URL.revokeObjectURL(it.url);state.items=state.items.filter(x=>x!==it);render();return;}
+    if(a==='pv'){openPreview([it],0);return;}
+    if(a==='rename'){renameOne(it);return;}
+  }
+  if(e.target.classList.contains('nm'))renameOne(it);
+});
+function renameOne(it){
+  const sug=it.custom||it.outName||it.file.name;
+  const v=prompt('New name for this file (the extension is added automatically):',sug.replace(/\.[^.]+$/,''));
+  if(v!==null){it.custom=v.trim()||null;paintRow(it);}
+}
+
+$('btnSelAll').addEventListener('click',()=>{state.items.forEach(i=>i.sel=true);render();});
+$('btnSelNone').addEventListener('click',()=>{state.items.forEach(i=>i.sel=false);render();});
+$('btnSelInv').addEventListener('click',()=>{state.items.forEach(i=>i.sel=!i.sel);render();});
+$('btnApplySel').addEventListener('click',()=>{
+  const s=readSettings(),n=selected().length;
+  selected().forEach(i=>i.override=Object.assign({},s));
+  render();
+  toast('These '+n+' image'+(n===1?'':'s')+' now keep their own settings — change the panel and apply again for the rest.','ok','Settings pinned');
+});
+$('btnClearOverride').addEventListener('click',()=>{
+  selected().forEach(i=>i.override=null);render();toast('Back to the global settings.');
+});
+$('btnConvertSel').addEventListener('click',()=>convert(selected()));
+$('btnRemoveSel').addEventListener('click',()=>{
+  state.items=state.items.filter(i=>{if(i.sel&&i.url)URL.revokeObjectURL(i.url);return !i.sel;});
+  render();
+});
+$('btnView').addEventListener('click',()=>{
+  state.view=state.view==='grid'?'list':'grid';
+  $('btnView').textContent=state.view==='grid'?'☰ List':'▦ Grid';
+  render();
+});
+$('btnClear').addEventListener('click',()=>{
+  state.items.forEach(i=>{if(i.url)URL.revokeObjectURL(i.url);});
+  state.items=[];linkRatio=null;render();
+});
+$('btnClearDone').addEventListener('click',()=>{
+  state.items=state.items.filter(i=>{
+    const fin=i.status==='done'||i.status==='skipped';
+    if(fin&&i.url)URL.revokeObjectURL(i.url);
+    return !fin;});
   render();
 });
 
-zipBtn.addEventListener('click', async () => {
-  const zip = new JSZip();
-  items.filter(it => it.resultBlob).forEach(it => {
-    zip.file(downloadName(it), it.resultBlob);
-  });
-  const content = await zip.generateAsync({type:'blob'});
-  const url = URL.createObjectURL(content);
-  const a = document.createElement('a');
-  a.href = url; a.download = 'enlarger_export.zip';
-  a.click();
-  URL.revokeObjectURL(url);
+document.querySelectorAll('input[name=rmode]').forEach(r=>r.addEventListener('change',()=>{
+  const m=document.querySelector('input[name=rmode]:checked').value;
+  $('paneP').hidden=m!=='pixels';$('panePct').hidden=m!=='percent';
+  $('panePrint').hidden=m!=='print';$('paneSide').hidden=m!=='oneside';
+  onChange();
+}));
+$('pxLink').addEventListener('click',()=>$('pxLink').classList.toggle('on'));
+$('pctLink').addEventListener('click',()=>$('pctLink').classList.toggle('on'));
+$('pxW').addEventListener('input',()=>{if($('pxLink').classList.contains('on')&&linkRatio)$('pxH').value=Math.round(+$('pxW').value/linkRatio);onChange();});
+$('pxH').addEventListener('input',()=>{if($('pxLink').classList.contains('on')&&linkRatio)$('pxW').value=Math.round(+$('pxH').value*linkRatio);onChange();});
+$('pctW').addEventListener('input',()=>{if($('pctLink').classList.contains('on'))$('pctH').value=$('pctW').value;onChange();});
+$('pctH').addEventListener('input',()=>{if($('pctLink').classList.contains('on'))$('pctW').value=$('pctH').value;onChange();});
+$('chkCrop').addEventListener('change',()=>{
+  if($('chkCrop').checked)$('chkFill').checked=false;
+  $('fillColorRow').hidden=!$('chkFill').checked;onChange();});
+$('chkFill').addEventListener('change',()=>{
+  if($('chkFill').checked)$('chkCrop').checked=false;
+  $('fillColorRow').hidden=!$('chkFill').checked;onChange();});
+$('sharpen').addEventListener('input',()=>$('sharpenVal').textContent=$('sharpen').value+'%');
+$('quality').addEventListener('input',()=>$('qualityVal').textContent=$('quality').value+'%');
+$('outFormat').addEventListener('change',()=>{
+  const png=$('outFormat').value==='image/png';
+  $('qualityRow').style.visibility=png?'hidden':'visible';
+  $('targetNote').hidden=!png||$('targetMode').value==='off';
+  onChange();});
+$('targetMode').addEventListener('change',()=>{
+  const on=$('targetMode').value!=='off';
+  $('targetBox').hidden=!on;
+  $('targetNote').hidden=!($('outFormat').value==='image/png'&&on);
+  onChange();});
+$('enhance').addEventListener('change',onChange);
+$('chkRename').addEventListener('change',()=>{$('renameBox').hidden=!$('chkRename').checked;updateRenamePreview();});
+['renamePattern','renameStart','chkUpperExt'].forEach(id=>$(id).addEventListener('input',updateRenamePreview));
+['prW','prH','prUnit','prDpi','sideMode','sideValue','filterSel','chkSwitchLong','chkPreserve',
+ 'chkSkipSmall','fillColor','targetVal','targetUnit','chkShrinkFit']
+  .forEach(id=>$(id).addEventListener('input',onChange));
+
+function onChange(){updateHints();repaintSubs();}
+/* any deliberate touch of a control clears the "you changed nothing" guard */
+document.querySelector('.layout').addEventListener('input',()=>{state.dirty=true;state.noopOK=false;},true);
+document.querySelector('.layout').addEventListener('change',()=>{state.dirty=true;state.noopOK=false;},true);
+
+$('btnConvert').addEventListener('click',()=>convert(state.items));
+$('btnZipNow').addEventListener('click',downloadZip);
+$('pmZip').addEventListener('click',downloadZip);
+$('pmCancel').addEventListener('click',()=>{state.cancel=true;$('pmCancel').textContent='Stopping…';});
+$('pmDone').addEventListener('click',()=>$('progressBack').classList.remove('open'));
+$('pmClose').addEventListener('click',()=>$('progressBack').classList.remove('open'));
+
+$('btnTheme').addEventListener('click',()=>{
+  const n=document.documentElement.dataset.theme==='dark'?'light':'dark';
+  document.documentElement.dataset.theme=n;
+  try{localStorage.setItem('enlarger-theme',n);}catch(e){}
 });
+$('btnFun').addEventListener('click',()=>{
+  const off=document.documentElement.dataset.fun==='off';
+  document.documentElement.dataset.fun=off?'':'off';
+  document.body.classList.toggle('fun',off);
+  $('btnFun').style.opacity=off?'1':'.45';
+  try{localStorage.setItem('enlarger-fun',off?'on':'off');}catch(e){}
+  if(off)confetti(60);
+});
+try{
+  const t=localStorage.getItem('enlarger-theme');if(t)document.documentElement.dataset.theme=t;
+  if(localStorage.getItem('enlarger-fun')==='off'){
+    document.documentElement.dataset.fun='off';document.body.classList.remove('fun');$('btnFun').style.opacity='.45';}
+  if(!localStorage.getItem('enlarger-tour'))
+    setTimeout(()=>toast('New here? Hit <b>Take the tour</b> at the top for a 60-second walkthrough.',null,'Welcome 👋'),900);
+}catch(e){}
+
+addEventListener('beforeunload',e=>{if(state.running){e.preventDefault();e.returnValue='';}});
+$('qualityRow').style.visibility='visible';
+
+/* a quiet hello for anyone who opens the console */
+try{
+  console.log('%c  Enlarger  %c  designed & built by Omar Wanis  ',
+    'background:#ff5a2e;color:#221008;font:600 13px/1.9 monospace;border-radius:3px 0 0 3px',
+    'background:#231f1a;color:#a2958a;font:13px/1.9 monospace;border-radius:0 3px 3px 0');
+  console.log('%cRuns entirely on your machine — no upload, no server, no tracking.',
+    'color:#6f645b;font:11px monospace');
+}catch(e){}
 
 render();
+
 </script>
 </body>
 </html>
